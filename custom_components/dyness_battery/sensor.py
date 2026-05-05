@@ -133,6 +133,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         and len(parts[1]) >= 8 and parts[1].isalnum()
     }
 
+    # Sensoren die beim Tower Pro TP7 auf Modul-Ebene nicht verfügbar sind
+    # (nur auf Master-Ebene → "by design" Unavailable vermeiden)
+    _TP7_MODULE_SKIP = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
+
     def _add_new_modules() -> None:
         module_data = (coordinator.data or {}).get("module_data", {})
         new_mids = [mid for mid in module_data if mid not in known_module_ids]
@@ -142,7 +146,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for mid in new_mids:
             known_module_ids.add(mid)
             mod = module_data[mid]
+            is_tp7_mod = bool(mod.get("is_tp7"))
             for data_key, trans_key, unit, dev_cls, state_cls, icon, precision in MODULE_SENSORS:
+                if is_tp7_mod and data_key in _TP7_MODULE_SKIP:
+                    continue  # TP7: nur Master liefert diese Werte
                 new_entities.append(
                     DynessModuleSensor(
                         coordinator, entry, mid, data_key, trans_key,

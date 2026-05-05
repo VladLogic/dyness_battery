@@ -419,10 +419,24 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         )
                         if _is_success(run_result):
                             self.running_data = run_result.get("data", {}) or {}
-                            _LOGGER.debug(
-                                "Dyness getLastRunningDataBySn: %d Felder",
-                                len(self.running_data)
+                            all_null = all(
+                                v is None or v == ""
+                                for v in self.running_data.values()
                             )
+                            if all_null:
+                                _LOGGER.debug(
+                                    "Dyness getLastRunningDataBySn: Alle %d Felder null "
+                                    "— kein Wechselrichter verbunden (normal bei reinen "
+                                    "Batteriespeichern wie Junior Box oder Powerbox G2)",
+                                    len(self.running_data)
+                                )
+                            else:
+                                _LOGGER.debug(
+                                    "Dyness getLastRunningDataBySn: %d Felder, "
+                                    "firmwareVersion=%s",
+                                    len(self.running_data),
+                                    self.running_data.get("firmwareVersion")
+                                )
                         else:
                             _LOGGER.debug(
                                 "Dyness getLastRunningDataBySn: Code %s – %s",
@@ -547,6 +561,46 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             data["alarmBms"]      = str(rt.get("5102", "0")) == "1"
                             data["alarmSys"]      = str(rt.get("5104", "0")) == "1"
                             data["alarmTotal"]    = rt.get("9999999")
+
+                    elif "13400" in rt or "12400" in rt:
+                        # Powerbox G2 Schema (deviceModelCode 42)
+                        # Kein Master/Slave Konzept — alles in einem Block
+                        # SOC: Point 13400 (genauer Wert) oder 12400 (gerundet)
+                        soc_g2 = _to_float(rt.get("13400")) or _to_float(rt.get("12400"))
+                        if soc_g2 is not None:
+                            data["soc"] = soc_g2
+                        data["packVoltage"]    = rt.get("13500")
+                        data["realTimePower"]  = rt.get("14000")  # Strom × Spannung?
+                        data["cycleCount"]     = rt.get("13900")
+                        # Kapazität: Point 14100 = Nutzbare Kapazität kWh (direkt vom BMS)
+                        g2_usable = _to_float(rt.get("14100"))
+                        if g2_usable is not None and g2_usable > 0:
+                            data["usableKwh"] = g2_usable
+                            if data.get("batteryCapacity") is None:
+                                data["batteryCapacity"] = g2_usable
+                        # Verbleibende Energie: usableKwh × SOC
+                        if g2_usable is not None and soc_g2 is not None:
+                            data["remainingKwh"] = round(g2_usable * soc_g2 / 100, 3)
+                        # Temperaturen: Points 12500–12800 (bis zu 4 Sensoren)
+                        temps_g2 = [_to_float(rt.get(str(12500 + i * 100))) for i in range(4)]
+                        temps_valid = [t for t in temps_g2 if t is not None and t > 0]
+                        if temps_valid:
+                            data["tempMax"] = max(temps_valid)
+                            data["tempMin"] = min(temps_valid) if len(temps_valid) > 1 else None
+                        # Zellspannungen: Points 10300–11800 (16 Zellen, DL5.0C-Schema)
+                        cells_g2 = []
+                        for i in range(1, 17):
+                            v = _to_float(rt.get(str(10200 + i * 100)))
+                            if v is not None and v > 0:
+                                cells_g2.append(v)
+                        if cells_g2:
+                            data["cellVoltageMax"] = max(cells_g2)
+                            data["cellVoltageMin"] = min(cells_g2)
+                        _LOGGER.debug(
+                            "Dyness: Powerbox G2 erkannt — SOC=%s%% usable=%s kWh "
+                            "cells=%d temps=%s",
+                            soc_g2, g2_usable, len(cells_g2), temps_valid
+                        )
 
                     # ── Temperatur-Logik ─────────────────────────────────────
                     # Wenn tempMax == tempMin → nur tempMax behalten (ein Sensor)
@@ -855,6 +909,8 @@ def _parse_module_points(sn: str, mid: str, pts: dict) -> dict:
     elif is_tp7_module:
         # Tower Pro TP7 Sub-Module: 30 Zellen, Points 11200-14100 (Schritte 100)
         # Temperaturen: 14300-15000 (bis zu 8 Sensoren, aktive per Point 14200)
+        # SOC, SOH, Spannung, Strom, Zyklen nur auf Master-Ebene verfügbar — nicht pro Modul
+        d["is_tp7"] = True
         n_temps = int(_to_float(pts.get("14200")) or 0)
         cells = []
         for i in range(1, 31):

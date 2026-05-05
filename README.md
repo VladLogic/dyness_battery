@@ -17,53 +17,81 @@ Eine Community-Integration für Home Assistant für **Dyness Batteriespeicher** 
 
 | Gerät | Status |
 |-------|--------|
+| Dyness Cygni 10.0HS | ✅ Getestet |
+| Dyness DL5.0C | ✅ Getestet |
 | Dyness Junior Box | ✅ Getestet |
-| Dyness Tower (non-pro) | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness Tower T14 | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness DL5.0C | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness PowerHaus | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness Stack100 | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness PowerBox Pro | ✅ Sollte funktionieren (Community-getestet) |
-| Dyness Cygni 10.0HS-M8 | ✅ Sollte funktionieren (Community-getestet) |
+| Dyness Powerbox G2 | ✅ Getestet (Grundfunktionen) |
+| Dyness PowerBox Pro | ✅ Getestet |
+| Dyness PowerHaus | ✅ Getestet |
+| Dyness Stack100 | ✅ Getestet |
+| Dyness Tower Pro TP7 | ✅ Getestet |
+| Dyness Tower T14 | ✅ Getestet |
 | Andere Dyness-Modelle mit WiFi-Dongle | ⚠️ Nicht getestet – Feedback willkommen |
 
 > Die Integration erkennt das Gerät automatisch über die API und registriert nur die Sensoren, die für das jeweilige Gerät verfügbar sind.
 
+---
+
 ### Verfügbare Sensoren
 
-Die folgenden Sensoren sind für alle Geräte verfügbar:
+#### Pack-Ebene (Haupt-Device)
 
-| Sensor | Beschreibung | Einheit |
-|--------|-------------|---------|
-| Ladestand (SOC) | Aktueller Ladestand | % |
-| Leistung | Lade-/Entladeleistung (+ = laden, − = entladen) | W |
-| Strom | Lade-/Entladestrom | A |
-| Batteriestatus | Charging / Discharging / Standby | – |
+Die folgenden Sensoren sind für **alle Geräte** verfügbar:
 
-Zusätzliche Sensoren werden automatisch aktiviert, sofern das Gerät die Daten liefert:
+| Sensor | Einheit |
+|--------|---------|
+| Ladestand (SOC) | % |
+| Leistung | W |
+| Strom | A |
+| Batteriestatus (Charging / Discharging / Standby) | – |
 
-| Sensor | Beschreibung | Einheit | Junior Box | Tower | DL5.0C | PowerHaus |
-|--------|-------------|---------|:---:|:---:|:---:|:---:|
-| Pack-Spannung | Gesamtspannung des Akkupacks | V | ✅ | – | ✅ | ✅ |
-| Batteriezustand (SOH) | State of Health | % | ✅ | ✅ | ✅ | ✅ |
-| Temperatur Max | Höchste Zellentemperatur | °C | ✅ | ✅ | ✅ | ✅ |
-| Temperatur Min | Niedrigste Zellentemperatur | °C | ✅ | ✅ | ✅ | ✅ |
-| Zellspannung Max | Höchste Einzelzellspannung | V | ✅ | ✅ | ✅ | ✅ |
-| Zellspannung Min | Niedrigste Einzelzellspannung | V | ✅ | ✅ | ✅ | ✅ |
-| Zellspannungsdifferenz | Max − Min Zellspannung (Gesundheitsindikator) | mV | ✅ | ✅ | ✅ | ✅ |
-| Heute geladen | Geladene Energie heute | kWh | ✅ | – | ✅ | – |
-| Heute entladen | Entladene Energie heute | kWh | ✅ | – | ✅ | – |
-| Gesamt geladen | Kumuliert geladene Energie | kWh | ✅ | ✅ | ✅ | – |
-| Gesamt entladen | Kumuliert entladene Energie | kWh | ✅ | – | ✅ | – |
-| Ladezyklen | Anzahl Batteriezyklen | – | – | ✅ | – | ✅ |
-| Nutzbare Kapazität | Kapazität × SOH | kWh | ✅ | ✅ | ✅ | ✅ |
-| Verbleibende Energie | Nutzbare Kapazität × SOC | kWh | ✅ | ✅ | ✅ | ✅ |
-| MOSFET-Temperatur | MOSFET Temperatur | °C | ✅ | – | ✅ | ✅ |
-| BMS-Temperatur Max | BMS Temperatur Max | °C | ✅ | – | ✅ | ✅ |
-| BMS-Temperatur Min | BMS Temperatur Min | °C | ✅ | – | ✅ | ✅ |
-| Alarmstatus | Gesamtalarm (0 = OK) | – | ✅ | – | ✅ | ✅ |
+Weitere Sensoren werden automatisch aktiviert, sofern das Gerät die Daten liefert:
 
-Folgende Sensoren sind unter **Diagnose** auf der Geräteseite verfügbar:
+| Sensor | Einheit | Junior Box | Tower T14 / TP7 | DL5.0C / Stack100 / PowerBox Pro | PowerHaus | Powerbox G2 |
+|--------|---------|:---:|:---:|:---:|:---:|:---:|
+| Pack-Spannung | V | ✅ | – | ✅ | ✅ | ✅ |
+| Batteriezustand (SOH) | % | ✅ | ✅ | ✅ | ✅ | – |
+| Temperatur Max | °C | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Temperatur Min | °C | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Zellspannung Max | V | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Zellspannung Min | V | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Zellspannungsdifferenz | mV | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Nutzbare Kapazität | kWh | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Verbleibende Energie | kWh | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Ladezyklen | – | – | ✅ | ✅ | ✅ | ✅ |
+| Heute geladen | kWh | ✅ | – | ✅ | – | – |
+| Heute entladen | kWh | ✅ | – | ✅ | – | – |
+| Gesamt geladen | kWh | ✅ | ✅ | ✅ | – | – |
+| Gesamt entladen | kWh | ✅ | – | ✅ | – | – |
+| MOSFET-Temperatur | °C | ✅ | – | ✅ | ✅ | – |
+| BMS-Temperatur Max | °C | ✅ | – | ✅ | ✅ | – |
+| BMS-Temperatur Min | °C | ✅ | – | ✅ | ✅ | – |
+| Alarmstatus | – | ✅ | ✅ | ✅ | ✅ | – |
+
+#### Modul-Ebene (Sub-Module Devices)
+
+Geräte mit mehreren Modulen (DL5.0C, Stack100, PowerBox Pro, Tower T14, Tower Pro TP7) erstellen automatisch ein eigenes Device pro Modul:
+
+| Sensor | Einheit | DL5.0C / Stack100 / PowerBox Pro | Tower T14 / TP7 |
+|--------|---------|:---:|:---:|
+| Ladestand Modul (SOC) | % | ✅ | – ¹ |
+| Batteriezustand Modul (SOH) | % | ✅ | – ¹ |
+| Modul-Spannung | V | ✅ | – ¹ |
+| Modul-Strom | A | ✅ | – ¹ |
+| Ladezyklen Modul | – | ✅ | – ¹ |
+| Zellspannung Max | V | ✅ | ✅ |
+| Zellspannung Min | V | ✅ | ✅ |
+| Zellspannungsdifferenz | mV | ✅ | ✅ |
+| Zelltemperatur 1 | °C | ✅ | ✅ |
+| Zelltemperatur 2 | °C | ✅ | ✅ |
+| Zelle 01 – 16 (DL5.0C) | V | ✅ | – |
+| Zelle 01 – 30 (Tower T14 / TP7) | V | – | ✅ |
+
+> ¹ Tower T14 / TP7: SOC, SOH, Spannung, Strom und Zyklen sind nur auf Systemebene (Haupt-Device) verfügbar — die API liefert diese Werte nicht pro Modul.
+
+> Einzelne Zellspannungen sind standardmäßig **deaktiviert** und können in HA unter Einstellungen → Geräte & Dienste → Dyness Battery → Gerät → Entitäten aktiviert werden.
+
+#### Diagnose-Sensoren (alle Geräte)
 
 | Sensor | Beschreibung |
 |--------|-------------|
@@ -73,15 +101,17 @@ Folgende Sensoren sind unter **Diagnose** auf der Geräteseite verfügbar:
 | Betriebsstatus | z.B. RunMode, StandBy, Charging |
 | Firmware-Version | Aktuelle Firmware |
 
+---
+
 ### Voraussetzungen
 
 1. Dyness Batterie ist bereits in der **Dyness App** eingerichtet und online
 
 ### Schritt 1: API-Zugangsdaten im Dyness Portal erstellen
 
-1. Öffne **Dyness Benutzer Smart Monitoring** [https://ems.dyness.com/login](https://ems.dyness.com/login) in deinem Browser
+1. Öffne **Dyness Benutzer Smart Monitoring** [https://ems.dyness.com/login](https://ems.dyness.com/login)
 2. Melde dich mit deinem Dyness-Konto an (dasselbe wie in der App)
-3. Wähle im Menü links **Entwicklerzentrum** und dann **API-Verwaltung**
+3. Wähle im Menü links **Entwicklerzentrum** → **API-Verwaltung**
 4. Klicke auf **API Key erstellen**
 5. Notiere **App ID** und **App Secret** – das Secret wird nur einmal angezeigt!
 
@@ -107,16 +137,9 @@ Folgende Sensoren sind unter **Diagnose** auf der Geräteseite verfügbar:
 2. Nach **Dyness Battery** suchen
 3. Nur **API ID** und **API Secret** eintragen — das Gerät wird automatisch erkannt
 
-| Feld | Beschreibung | Beispiel |
-|------|-------------|---------|
-| API ID | Dyness API ID | `abc123xyz` |
-| API Secret | Dyness API Secret | `secretkey456` |
-
-> **Mehrere Batterien:** Bei mehreren Batterien auf einem Account wird automatisch die erste erkannte BMS verwendet. Für weitere Batterien einfach die Integration erneut hinzufügen — dieselben API-Zugangsdaten, das Gerät wird separat erkannt.
+> **Mehrere Batterien:** Bei mehreren Batterien auf einem Account einfach die Integration erneut hinzufügen — dieselben API-Zugangsdaten, das zweite Gerät wird separat erkannt.
 
 ### API Rate Limit & Scan-Intervall
-
-Die Dyness Cloud API erlaubt ca. 60 Anfragen pro Stunde. Die Integration passt das Update-Intervall automatisch an die Anzahl der erkannten Batteriemodule an:
 
 | Module | Intervall |
 |--------|-----------|
@@ -127,23 +150,11 @@ Die Dyness Cloud API erlaubt ca. 60 Anfragen pro Stunde. Die Integration passt d
 ### Bekannte Einschränkungen
 
 - **Nur Monitoring** – Steuerung (Ladezeiten, SOC-Grenzen) wird von der API nicht unterstützt
-- **5-Minuten-Intervall** – Die API liefert Daten in 5-Minuten-Schritten
-- **Internetabhängig** – Keine lokale Verbindung (WiFi-Dongle ist intern verbaut)
+- **Internetabhängig** – Keine lokale Verbindung möglich
 
 ### Neues Modell hinzufügen
 
-Du hast ein anderes Dyness-Modell mit WiFi-Dongle und möchtest es testen? Erstelle ein [Issue](https://github.com/shopf/dyness_battery/issues) mit folgenden Informationen:
-
-- Modellbezeichnung (z.B. `Tower T14`)
-- Ausgabe des API-Testscripts (siehe `tools/dyness_test.py`)
-
-### Community & Support
-
-| | |
-|---|---|
-| 💬 **Fragen & Ideen** | [GitHub Discussions](https://github.com/shopf/dyness_battery/discussions) |
-| 🐛 **Fehler melden** | [GitHub Issues](https://github.com/shopf/dyness_battery/issues) |
-| 🔌 **Neues Gerät** | Issue erstellen mit Ausgabe von `dyness_test.py` |
+Du hast ein anderes Dyness-Modell und möchtest es hinzufügen lassen? Erstelle ein [Issue](https://github.com/shopf/dyness_battery/issues) mit der Ausgabe des API-Testscripts `tools/dyness_test.py`.
 
 ---
 
@@ -153,53 +164,81 @@ Du hast ein anderes Dyness-Modell mit WiFi-Dongle und möchtest es testen? Erste
 
 | Device | Status |
 |--------|--------|
+| Dyness Cygni 10.0HS | ✅ Tested |
+| Dyness DL5.0C | ✅ Tested |
 | Dyness Junior Box | ✅ Tested |
-| Dyness Tower (non-pro) | ✅ Should work (community-tested) |
-| Dyness Tower T14 | ✅ Should work (community-tested) |
-| Dyness DL5.0C | ✅ Should work (community-tested) |
-| Dyness PowerHaus | ✅ Should work (community-tested) |
-| Dyness Stack100 | ✅ Should work (community-tested) |
-| Dyness PowerBox Pro | ✅ Should work (community-tested) |
-| Dyness Cygni 10.0HS-M8 | ✅ Should work (community-tested) |
+| Dyness Powerbox G2 | ✅ Tested (basic features) |
+| Dyness PowerBox Pro | ✅ Tested |
+| Dyness Stack100 | ✅ Tested |
+| Dyness PowerHaus | ✅ Tested |
+| Dyness Tower Pro TP7 | ✅ Tested |
+| Dyness Tower T14 | ✅ Tested |
 | Other Dyness models with WiFi dongle | ⚠️ Not tested – feedback welcome |
 
 > The integration automatically detects the device via the API and only registers sensors available for that specific device.
 
+---
+
 ### Available Sensors
 
-The following sensors are available for all devices:
+#### Pack Level (Main Device)
 
-| Sensor | Description | Unit |
-|--------|-------------|------|
-| State of Charge (SOC) | Current battery level | % |
-| Power | Charge/discharge power (+ = charging, − = discharging) | W |
-| Current | Charge/discharge current | A |
-| Battery Status | Charging / Discharging / Standby | – |
+Available for **all devices**:
 
-Additional sensors are automatically enabled if the device provides the data:
+| Sensor | Unit |
+|--------|------|
+| State of Charge (SOC) | % |
+| Power | W |
+| Current | A |
+| Battery Status (Charging / Discharging / Standby) | – |
 
-| Sensor | Description | Unit | Junior Box | Tower | DL5.0C | PowerHaus |
-|--------|-------------|------|:---:|:---:|:---:|:---:|
-| Pack Voltage | Total battery pack voltage | V | ✅ | – | ✅ | ✅ |
-| State of Health (SOH) | Battery health | % | ✅ | ✅ | ✅ | ✅ |
-| Temperature Max | Highest cell temperature | °C | ✅ | ✅ | ✅ | ✅ |
-| Temperature Min | Lowest cell temperature | °C | ✅ | ✅ | ✅ | ✅ |
-| Cell Voltage Max | Highest individual cell voltage | V | ✅ | ✅ | ✅ | ✅ |
-| Cell Voltage Min | Lowest individual cell voltage | V | ✅ | ✅ | ✅ | ✅ |
-| Cell Voltage Spread | Max − Min cell voltage (health indicator) | mV | ✅ | ✅ | ✅ | ✅ |
-| Energy Charged Today | Energy charged today | kWh | ✅ | – | ✅ | – |
-| Energy Discharged Today | Energy discharged today | kWh | ✅ | – | ✅ | – |
-| Energy Charged Total | Cumulative energy charged | kWh | ✅ | ✅ | ✅ | – |
-| Energy Discharged Total | Cumulative energy discharged | kWh | ✅ | – | ✅ | – |
-| Cycle Count | Number of charge cycles | – | – | ✅ | – | ✅ |
-| Usable Capacity | Capacity × SOH | kWh | ✅ | ✅ | ✅ | ✅ |
-| Energy Remaining | Usable capacity × SOC | kWh | ✅ | ✅ | ✅ | ✅ |
-| MOSFET Temperature | MOSFET temperature | °C | ✅ | – | ✅ | ✅ |
-| BMS Temperature Max | BMS temperature max | °C | ✅ | – | ✅ | ✅ |
-| BMS Temperature Min | BMS temperature min | °C | ✅ | – | ✅ | ✅ |
-| Alarm Status | Overall alarm (0 = OK) | – | ✅ | – | ✅ | ✅ |
+Additional sensors enabled automatically if provided by the device:
 
-The following sensors are available under **Diagnostics** on the device page:
+| Sensor | Unit | Junior Box | Tower T14 / TP7 | DL5.0C / Stack100 / PowerBox Pro | PowerHaus | Powerbox G2 |
+|--------|------|:---:|:---:|:---:|:---:|:---:|
+| Pack Voltage | V | ✅ | – | ✅ | ✅ | ✅ |
+| State of Health (SOH) | % | ✅ | ✅ | ✅ | ✅ | – |
+| Temperature Max | °C | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Temperature Min | °C | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cell Voltage Max | V | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cell Voltage Min | V | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cell Voltage Spread | mV | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Usable Capacity | kWh | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Energy Remaining | kWh | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cycle Count | – | – | ✅ | ✅ | ✅ | ✅ |
+| Energy Charged Today | kWh | ✅ | – | ✅ | – | – |
+| Energy Discharged Today | kWh | ✅ | – | ✅ | – | – |
+| Energy Charged Total | kWh | ✅ | ✅ | ✅ | – | – |
+| Energy Discharged Total | kWh | ✅ | – | ✅ | – | – |
+| MOSFET Temperature | °C | ✅ | – | ✅ | ✅ | – |
+| BMS Temperature Max | °C | ✅ | – | ✅ | ✅ | – |
+| BMS Temperature Min | °C | ✅ | – | ✅ | ✅ | – |
+| Alarm Status | – | ✅ | ✅ | ✅ | ✅ | – |
+
+#### Module Level (Sub-Module Devices)
+
+Devices with multiple modules (DL5.0C, Stack100, PowerBox Pro, Tower T14, Tower Pro TP7) automatically create a separate device per module:
+
+| Sensor | Unit | DL5.0C / Stack100 / PowerBox Pro | Tower T14 / TP7 |
+|--------|------|:---:|:---:|
+| Module SOC | % | ✅ | – ¹ |
+| Module SOH | % | ✅ | – ¹ |
+| Module Voltage | V | ✅ | – ¹ |
+| Module Current | A | ✅ | – ¹ |
+| Module Cycle Count | – | ✅ | – ¹ |
+| Cell Voltage Max | V | ✅ | ✅ |
+| Cell Voltage Min | V | ✅ | ✅ |
+| Cell Voltage Spread | mV | ✅ | ✅ |
+| Cell Temperature 1 | °C | ✅ | ✅ |
+| Cell Temperature 2 | °C | ✅ | ✅ |
+| Cell 01 – 16 (DL5.0C) | V | ✅ | – |
+| Cell 01 – 30 (Tower T14 / TP7) | V | – | ✅ |
+
+> ¹ Tower T14 / TP7: SOC, SOH, Voltage, Current and Cycle Count are only available at system level (main device) — the API does not provide these values per module.
+
+> Individual cell voltages are **disabled by default** and can be enabled in HA under Settings → Devices & Services → Dyness Battery → Device → Entities.
+
+#### Diagnostic Sensors (all devices)
 
 | Sensor | Description |
 |--------|-------------|
@@ -209,11 +248,13 @@ The following sensors are available under **Diagnostics** on the device page:
 | Work Status | e.g. RunMode, StandBy, Charging |
 | Firmware Version | Current firmware version |
 
-### Step 1: Create API credentials in the Dyness Portal
+---
 
-1. Open **Dyness User Smart Monitoring** [https://ems.dyness.com/login](https://ems.dyness.com/login) in your browser
+### Step 1: Create API Credentials in the Dyness Portal
+
+1. Open **Dyness User Smart Monitoring** [https://ems.dyness.com/login](https://ems.dyness.com/login)
 2. Log in with your Dyness account (same as the app)
-3. Select **Developer Center** and then **API Management** from the left menu
+3. Select **Developer Center** → **API Management** from the left menu
 4. Click **Create API Key**
 5. Note down **App ID** and **App Secret** – the secret is only shown once!
 
@@ -239,16 +280,9 @@ The following sensors are available under **Diagnostics** on the device page:
 2. Search for **Dyness Battery**
 3. Enter only your **API ID** and **API Secret** — the device is discovered automatically
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| API ID | Your Dyness API ID | `abc123xyz` |
-| API Secret | Your Dyness API Secret | `secretkey456` |
-
-> **Multiple batteries:** If you have multiple batteries on one account, the first detected BMS is used automatically. To add further batteries, simply add the integration again with the same credentials.
+> **Multiple batteries:** Simply add the integration again with the same credentials to set up additional batteries on the same account.
 
 ### API Rate Limit & Scan Interval
-
-The Dyness Cloud API allows approximately 60 requests per hour. The integration automatically adjusts the update interval based on the number of detected battery modules:
 
 | Modules | Interval |
 |---------|----------|
@@ -259,15 +293,11 @@ The Dyness Cloud API allows approximately 60 requests per hour. The integration 
 ### Known Limitations
 
 - **Monitoring only** – Control (charge schedules, SOC limits) is not supported via the API
-- **5-minute interval** – API provides data in 5-minute increments
-- **Cloud dependent** – No local connection (WiFi dongle is built-in)
+- **Cloud dependent** – No local connection possible
 
 ### Adding a New Model
 
-Do you have a different Dyness model with a WiFi dongle and want to test it? Open an [Issue](https://github.com/shopf/dyness_battery/issues) with the following information:
-
-- Model name (e.g. `Tower T14`)
-- Output of the API test script (see `tools/dyness_test.py`)
+Open an [Issue](https://github.com/shopf/dyness_battery/issues) with the output of the API test script `tools/dyness_test.py`:
 
 ---
 
@@ -276,21 +306,15 @@ Do you have a different Dyness model with a WiFi dongle and want to test it? Ope
 Uses the **Dyness Open API v1.1** with HmacSHA1 authentication.
 
 Endpoints used:
-- `POST /v1/device/storage/list` – Auto-discover device SN
+- `POST /v1/device/storage/list` – Auto-discover device SN and work status
 - `POST /v1/device/bindSn` – Bind device to API key
+- `POST /v1/device/realTime/data` – Real-time BMS data (every 5 min)
 - `POST /v1/device/getLastPowerDataBySn` – Current power data (every 5 min)
-- `POST /v1/device/realTime/data` – Real-time BMS data: pack voltage, SOH, temperatures, cell voltages, energy totals, voltage spread (every 5 min)
 - `POST /v1/station/info` – Station info (battery capacity)
 - `POST /v1/device/household/storage/detail` – Device details (firmware, status)
-- `POST /v1/device/storage/list` – Work status (every 5 min)
+- `POST /v1/device/getLastRunningDataBySn` – Runtime data (firmware version)
 
 ---
-
-## Contributing
-
-Pull requests and issues are welcome! Especially needed:
-- Testing with other Dyness models
-- Improvements to sensor data
 
 ## Community & Support
 
