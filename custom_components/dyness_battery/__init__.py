@@ -474,11 +474,23 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         data = valid[-1] if valid else (data[-1] if data else {})
 
                     # ── Statische Felder ──────────────────────────────────────
-                    # batteryCapacity aus station/info = Kapazität eines Moduls
-                    # Bei mehreren Modulen mit Modulanzahl multiplizieren
+                    data["deviceCommunicationStatus"] = self.device_info.get("deviceCommunicationStatus")
+                    data["firmwareVersion"]            = self.device_info.get("firmwareVersion")
+                    data["workStatus"]                 = self.storage_info.get("workStatus")
+
+                    # ── realTime/data Felder ──────────────────────────────────
+                    rt = self.realtime_data
+
+                    # batteryCapacity aus station/info:
+                    # - Standard-Geräte (DL5.0C, Stack100, Powerbox Pro):
+                    #   station/info = Kapazität EINES Moduls → × n_modules
+                    # - Tower / Tower Pro TP7/TP11 (Schema "1400" in rt):
+                    #   station/info = GESAMT-Kapazität → NICHT multiplizieren
+                    #   Point 1700 überschreibt batteryCapacity sowieso korrekt
                     bc_single = _to_float(self.station_info.get("batteryCapacity"))
                     n_modules = max(len(self._module_sns), 1)
-                    if bc_single is not None and n_modules > 1:
+                    is_tower_schema = "1400" in rt
+                    if bc_single is not None and n_modules > 1 and not is_tower_schema:
                         data["batteryCapacity"] = round(bc_single * n_modules, 3)
                         _LOGGER.debug(
                             "Dyness: batteryCapacity %s × %d Module = %s kWh",
@@ -486,12 +498,6 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         )
                     else:
                         data["batteryCapacity"] = bc_single
-                    data["deviceCommunicationStatus"] = self.device_info.get("deviceCommunicationStatus")
-                    data["firmwareVersion"]            = self.device_info.get("firmwareVersion")
-                    data["workStatus"]                 = self.storage_info.get("workStatus")
-
-                    # ── realTime/data Felder ──────────────────────────────────
-                    rt = self.realtime_data
                     if "800" in rt:
                         # Junior Box / DL5.0C / PowerHaus Schema
                         data["packVoltage"]           = rt.get("600")
@@ -562,32 +568,53 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             data["alarmSys"]      = str(rt.get("5104", "0")) == "1"
                             data["alarmTotal"]    = rt.get("9999999")
 
-                    elif "13400" in rt or "12400" in rt:
+                    elif ("13400" in rt or "12400" in rt) and "800" not in rt and "1400" not in rt:
                         # Powerbox G2 Schema (deviceModelCode 42)
                         # Kein Master/Slave Konzept — alles in einem Block
-                        # SOC: Point 13400 (genauer Wert) oder 12400 (gerundet)
-                        soc_g2 = _to_float(rt.get("13400")) or _to_float(rt.get("12400"))
-                        if soc_g2 is not None:
-                            data["soc"] = soc_g2
-                        data["packVoltage"]    = rt.get("13500")
-                        data["realTimePower"]  = rt.get("14000")  # Strom × Spannung?
-                        data["cycleCount"]     = rt.get("13900")
-                        # Kapazität: Point 14100 = Nutzbare Kapazität kWh (direkt vom BMS)
-                        g2_usable = _to_float(rt.get("14100"))
+                        #
+                        # WICHTIG: Point-Bedeutungen beim G2 (aus API-Log verifiziert):
+                        # 12300 = Anzahl Temperatursensoren
+                        # 12400 = BMS Board Temperatur (°C) — KEIN SOC!
+                        # 12500–12800 = Zellbereich-Temperaturen (°C)
+                        # 13400 = Strom (A) — KEIN SOC!
+                        # 13500 = Modulspannung (V)
+                        # 13900 = Ladezyklen
+                        # 14000 = Remain capacity 2 (Ah)
+                        # 14100 = Module total capacity 2 (Ah) — NICHT kWh!
+                        # SOC kommt ausschließlich aus lastPowerData (wie alle anderen Geräte)
+                        # usableKwh kommt aus station/info batteryCapacity
+
+                        data["packVoltage"]   = rt.get("13500")
+                        data["realTimePower"] = rt.get("14000")
+                        data["cycleCount"]    = rt.get("13900")
+
+                        # Nutzbare Kapazität: station/info batteryCapacity ist korrekt (20.48 kWh)
+                        # Point 14100 = Ah-Wert (nicht kWh) → nicht verwenden
+                        g2_usable = _to_float(self.station_info.get("batteryCapacity"))
                         if g2_usable is not None and g2_usable > 0:
                             data["usableKwh"] = g2_usable
-                            if data.get("batteryCapacity") is None:
-                                data["batteryCapacity"] = g2_usable
-                        # Verbleibende Energie: usableKwh × SOC
-                        if g2_usable is not None and soc_g2 is not None:
-                            data["remainingKwh"] = round(g2_usable * soc_g2 / 100, 3)
-                        # Temperaturen: Points 12500–12800 (bis zu 4 Sensoren)
-                        temps_g2 = [_to_float(rt.get(str(12500 + i * 100))) for i in range(4)]
-                        temps_valid = [t for t in temps_g2 if t is not None and t > 0]
-                        if temps_valid:
-                            data["tempMax"] = max(temps_valid)
-                            data["tempMin"] = min(temps_valid) if len(temps_valid) > 1 else None
-                        # Zellspannungen: Points 10300–11800 (16 Zellen, DL5.0C-Schema)
+
+                        # Verbleibende Energie: usableKwh × SOC (SOC aus lastPowerData)
+                        soc_val = _to_float(data.get("soc"))
+                        if g2_usable is not None and soc_val is not None:
+                            data["remainingKwh"] = round(g2_usable * soc_val / 100, 3)
+
+                        # Temperaturen:
+                        # 12400 = BMS Board Temperatur
+                        # 12500–12800 = Zellbereich-Temperaturen (je 4 Zellen)
+                        bms_temp = _to_float(rt.get("12400"))
+                        cell_temps = [
+                            _to_float(rt.get(str(12500 + i * 100)))
+                            for i in range(4)
+                        ]
+                        cell_temps_valid = [t for t in cell_temps if t is not None and t > 0]
+                        if cell_temps_valid:
+                            data["tempMax"] = max(cell_temps_valid)
+                            data["tempMin"] = min(cell_temps_valid) if len(cell_temps_valid) > 1 else None
+                        elif bms_temp is not None:
+                            data["tempMax"] = bms_temp
+
+                        # Zellspannungen: Points 10300–11800 (16 Zellen)
                         cells_g2 = []
                         for i in range(1, 17):
                             v = _to_float(rt.get(str(10200 + i * 100)))
@@ -596,10 +623,12 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         if cells_g2:
                             data["cellVoltageMax"] = max(cells_g2)
                             data["cellVoltageMin"] = min(cells_g2)
+
                         _LOGGER.debug(
-                            "Dyness: Powerbox G2 erkannt — SOC=%s%% usable=%s kWh "
-                            "cells=%d temps=%s",
-                            soc_g2, g2_usable, len(cells_g2), temps_valid
+                            "Dyness: Powerbox G2 — packVoltage=%s V, usable=%s kWh, "
+                            "SOC=%s%%, cells=%d, temps=%s",
+                            data.get("packVoltage"), g2_usable,
+                            soc_val, len(cells_g2), cell_temps_valid
                         )
 
                     # ── Temperatur-Logik ─────────────────────────────────────

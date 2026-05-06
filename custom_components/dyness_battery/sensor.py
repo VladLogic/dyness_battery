@@ -120,24 +120,35 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # HA-Neustart bereits registrierte Module nicht erneut hinzugefügt werden
     # und der "unique ID already exists"-Fehler verschwindet.
     from homeassistant.helpers import entity_registry as er
-    _er = er.async_get(hass)
-    known_module_ids: set = {
-        # unique_id Schema: "{entry_id}_{module_id}_{data_key}"
-        # Modul-SNs sind alphanumerisch und mind. 8 Zeichen lang
-        # (z.B. "06130593", "D603250905007506", "0106032412230990")
-        # Pack-Sensor-Keys wie "cell", "temp", "soc" sind kürzer oder rein alpha
-        # → len >= 8 and isalnum() schließt Pack-Sensoren sicher aus
-        parts[1]
-        for entity in er.async_entries_for_config_entry(_er, entry.entry_id)
-        if len(parts := entity.unique_id.split("_")) >= 3
-        and len(parts[1]) >= 8 and parts[1].isalnum()
-    }
+
+    # known_module_ids wird lazy beim ersten _add_new_modules Aufruf befüllt.
+    # NICHT beim Setup — zu diesem Zeitpunkt ist die Entity Registry nach einem
+    # HA Restart möglicherweise noch nicht vollständig geladen, was zu einer
+    # leeren Menge führt und damit zu doppelter Registrierung + Unavailable.
+    known_module_ids: set = set()
+    _registry_scanned: bool = False
 
     # Sensoren die beim Tower Pro TP7 auf Modul-Ebene nicht verfügbar sind
     # (nur auf Master-Ebene → "by design" Unavailable vermeiden)
     _TP7_MODULE_SKIP = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
 
     def _add_new_modules() -> None:
+        nonlocal _registry_scanned
+        # Lazy Registry-Scan: erst beim ersten Aufruf, wenn Registry garantiert geladen
+        if not _registry_scanned:
+            _registry_scanned = True
+            _er = er.async_get(hass)
+            scanned = {
+                parts[1]
+                for entity in er.async_entries_for_config_entry(_er, entry.entry_id)
+                if len(parts := entity.unique_id.split("_")) >= 3
+                and len(parts[1]) >= 8 and parts[1].isalnum()
+            }
+            known_module_ids.update(scanned)
+            _LOGGER.debug(
+                "Dyness: known_module_ids aus Registry: %s",
+                known_module_ids or "leer"
+            )
         module_data = (coordinator.data or {}).get("module_data", {})
         new_mids = [mid for mid in module_data if mid not in known_module_ids]
         if not new_mids:
