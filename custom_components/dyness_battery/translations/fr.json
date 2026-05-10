@@ -360,7 +360,48 @@
       },
       "balancing_status": {
         "name": "Balancing Status"
+      },
+      "installed_power": {
+        "name": "Installed PV Power"
+      },
+      "data_update_time": {
+        "name": "Data Timestamp"
       }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dyness Battery",
+        "description": "Entrez vos identifiants API Dyness. Sélectionnez votre région — l'appareil sera détecté automatiquement.",
+        "data": {
+          "api_id": "API ID",
+          "api_secret": "API Secret",
+          "region": "Région"
+        }
+      },
+      "select_device": {
+        "title": "Dyness Battery – Sélectionner un appareil",
+        "description": "{count} appareil(s) trouvé(s) sur votre compte. Veuillez sélectionner la batterie à ajouter. Vous pouvez ajouter l'intégration à nouveau pour configurer d'autres appareils.",
+        "data": {
+          "device_sn": "Appareil"
+        }
+      },
+      "manual": {
+        "title": "Dyness Battery – Configuration manuelle",
+        "description": "Entrez manuellement vos identifiants API, la région et les numéros de série.",
+        "data": {
+          "api_id": "API ID",
+          "api_secret": "API Secret",
+          "region": "Région",
+          "device_sn": "N° de série batterie (ex. R07ABCDEF123456-BMS)",
+          "dongle_sn": "N° de série dongle (optionnel)"
+        }
+      }
+    },
+    "error": {
+      "discovery_failed": "Impossible de détecter l'appareil automatiquement. Veuillez utiliser la configuration manuelle.",
+      "device_not_found": "Appareil sélectionné introuvable. Veuillez réessayer."
     }
   }
 }

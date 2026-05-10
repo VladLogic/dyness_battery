@@ -321,6 +321,51 @@
       },
       "balancing_status": {
         "name": "Balancing Status"
+      },
+      "energy_charge_total": {
+        "name": "Energy Charged Total"
+      },
+      "energy_discharge_total": {
+        "name": "Energy Discharged Total"
+      },
+      "battery_soh": {
+        "name": "State of Health"
+      },
+      "energy_charge_day": {
+        "name": "Energy Charged Today"
+      },
+      "battery_status": {
+        "name": "Battery Status"
+      },
+      "cell_voltage_max": {
+        "name": "Cell Voltage Max"
+      },
+      "temp_min": {
+        "name": "Temperature Min"
+      },
+      "remaining_kwh": {
+        "name": "Energy Remaining"
+      },
+      "energy_discharge_day": {
+        "name": "Energy Discharged Today"
+      },
+      "cell_voltage_diff_mv": {
+        "name": "Cell Voltage Spread"
+      },
+      "temp_max": {
+        "name": "Temperature Max"
+      },
+      "usable_kwh": {
+        "name": "Usable Capacity"
+      },
+      "cell_voltage_min": {
+        "name": "Cell Voltage Min"
+      },
+      "cycle_count": {
+        "name": "Cycle Count"
+      },
+      "pack_voltage": {
+        "name": "Pack Voltage"
       }
     }
   },
@@ -345,10 +390,18 @@
           "device_sn": "Battery SN (e.g. R07ABCDEF123456-BMS)",
           "dongle_sn": "Dongle SN (optional)"
         }
+      },
+      "select_device": {
+        "title": "Dyness Battery – Select Device",
+        "description": "{count} devices found on your account. Please select the battery you want to add. You can add the integration again to set up additional devices.",
+        "data": {
+          "device_sn": "Device"
+        }
       }
     },
     "error": {
-      "discovery_failed": "Could not discover device automatically. Please use manual setup."
+      "discovery_failed": "Could not discover device automatically. Please use manual setup.",
+      "device_not_found": "Selected device not found. Please try again."
     }
   }
 }

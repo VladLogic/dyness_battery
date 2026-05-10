@@ -360,7 +360,48 @@
       },
       "balancing_status": {
         "name": "Balancing-Status"
+      },
+      "installed_power": {
+        "name": "Installierte PV-Leistung"
+      },
+      "data_update_time": {
+        "name": "Datumsstempel"
       }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Dyness Battery",
+        "description": "Gib deine Dyness API-Zugangsdaten ein. Wähle deine Region — das Gerät wird automatisch erkannt.",
+        "data": {
+          "api_id": "API ID",
+          "api_secret": "API Secret",
+          "region": "Region"
+        }
+      },
+      "select_device": {
+        "title": "Dyness Battery – Gerät auswählen",
+        "description": "{count} Geräte auf deinem Account gefunden. Bitte wähle die Batterie aus, die du hinzufügen möchtest. Du kannst die Integration erneut hinzufügen, um weitere Geräte einzurichten.",
+        "data": {
+          "device_sn": "Gerät"
+        }
+      },
+      "manual": {
+        "title": "Dyness Battery – Manuelle Einrichtung",
+        "description": "Gib deine API-Zugangsdaten, Region und Seriennummern manuell ein.",
+        "data": {
+          "api_id": "API ID",
+          "api_secret": "API Secret",
+          "region": "Region",
+          "device_sn": "Batterie-SN (z.B. R07ABCDEF123456-BMS)",
+          "dongle_sn": "Dongle-SN (optional)"
+        }
+      }
+    },
+    "error": {
+      "discovery_failed": "Gerät konnte nicht automatisch erkannt werden. Bitte manuelle Einrichtung verwenden.",
+      "device_not_found": "Ausgewähltes Gerät nicht gefunden. Bitte erneut versuchen."
     }
   }
 }
