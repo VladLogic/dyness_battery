@@ -97,7 +97,8 @@ class DynessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._devices = _select_bms_devices(device_list)
 
             if not self._devices:
-                errors["base"] = "discovery_failed"
+                # FIX: vidarebefordra till manual-steget istället för att fastna
+                return await self.async_step_manual()
             elif len(self._devices) == 1:
                 # Nur ein Gerät → direkt anlegen
                 return await self._create_entry_for_device(self._devices[0])
@@ -174,13 +175,14 @@ class DynessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             sn     = user_input["device_sn"]
-            region = user_input.get("region", "europe")
-            await self.async_set_unique_id(f"{user_input['api_id']}_{sn}")
+            region = user_input.get("region", self._region or "europe")
+            api_id = user_input["api_id"]
+            await self.async_set_unique_id(f"{api_id}_{sn}")
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
                 title="Dyness Battery",
                 data={
-                    "api_id":     user_input["api_id"],
+                    "api_id":     api_id,
                     "api_secret": user_input["api_secret"],
                     "api_base":   API_REGIONS.get(region, API_REGIONS["europe"]),
                     "device_sn":  sn,
@@ -191,7 +193,7 @@ class DynessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required("api_id",     default=self._api_id     or ""): str,
             vol.Required("api_secret", default=self._api_secret or ""): str,
-            vol.Required("region",     default="europe"): vol.In(["europe", "apac"]),
+            vol.Required("region",     default=self._region     or "europe"): vol.In(["europe", "apac"]),
             vol.Required("device_sn"): str,
             vol.Optional("dongle_sn", default=""): str,
         })
