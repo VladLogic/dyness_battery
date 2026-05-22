@@ -1,4 +1,4 @@
-"""Sensoren für Dyness Battery Integration."""
+"""Sensorer för Dyness Battery Integration."""
 import logging
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
@@ -118,22 +118,41 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if key in ALWAYS_REGISTER or available_data.get(key) is not None
     ])
 
-    # Modul-Sensoren — dynamisch bei jedem neuen Modul registrieren
-    # known_module_ids aus der Entity Registry vorbelegen, damit nach einem
-    # HA-Neustart bereits registrierte Module nicht erneut hinzugefügt werden
-    # und der "unique ID already exists"-Fehler verschwindet.
+    # ── Modul-Sensoren ────────────────────────────────────────────────────────
     from homeassistant.helpers import entity_registry as er
 
-    # known_module_ids wird lazy beim ersten _add_new_modules Aufruf befüllt.
-    # NICHT beim Setup — zu diesem Zeitpunkt ist die Entity Registry nach einem
-    # HA Restart möglicherweise noch nicht vollständig geladen, was zu einer
-    # leeren Menge führt und damit zu doppelter Registrierung + Unavailable.
+    # Sensors only available at the BMS master level on Stack100 — never per-module.
+    # Registering them per-module would produce permanently Unavailable entities.
+    _STACK100_MODULE_SKIP = {
+        'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm',
+    }
+
+    # Same for Tower Pro TP7 sub-modules (SOC/SOH/voltage etc. only on master).
+    _TP7_MODULE_SKIP = {
+        'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm',
+    }
+
+    def _is_stack100_module(mod: dict) -> bool:
+        """Detect a Stack100 sub-module.
+
+        Stack100 modules carry cell voltages and temperatures but NOT soc/voltage/current
+        — those live only on the BMS master. The module_number point (11000) is always
+        present on Stack100 sub-modules.
+        """
+        return (
+            not mod.get("is_tp7")
+            and mod.get("soc") is None
+            and mod.get("voltage") is None
+            and mod.get("module_number") is not None
+        )
+
+    # known_module_ids: prevents re-adding the same module within one session.
+    # Intentionally left empty at startup — HA re-uses existing registry entries via
+    # unique_id automatically, so re-calling async_add_entities after a restart is safe
+    # and necessary to re-attach the coordinator. True duplicates within a session are
+    # prevented by this set from the second _add_new_modules call onward.
     known_module_ids: set = set()
     _registry_scanned: bool = False
-
-    # Sensoren die beim Tower Pro TP7 auf Modul-Ebene nicht verfügbar sind
-    # (nur auf Master-Ebene → "by design" Unavailable vermeiden)
-    _TP7_MODULE_SKIP = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
 
     def _add_new_modules() -> None:
         nonlocal _registry_scanned
@@ -141,17 +160,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if not module_data:
             return
 
-        # Beim ersten Aufruf: Registry-Scan.
-        #
-        # WICHTIG: known_module_ids verhindert doppelte Registrierung innerhalb
-        # einer Session. Nach einem HA-Restart muss async_add_entities jedoch
-        # erneut aufgerufen werden — auch für bereits bekannte Module — damit HA
-        # die Entities mit dem Coordinator verknüpft. HA verhindert echte Duplikate
-        # intern über die unique_id (bestehender Registry-Eintrag wird wiederverwendet).
-        #
-        # Deshalb: beim ersten Scan known_module_ids NICHT mit Registry-IDs befüllen.
-        # Stattdessen alle Module in module_data als "neu" behandeln → instanziieren.
-        # Ab dem zweiten Aufruf verhindert known_module_ids echte Duplikate.
+        # On the very first call: log how many modules the registry already knows about
+        # (purely informational — we do NOT pre-populate known_module_ids from registry
+        # because all modules must be instaniated to re-attach the coordinator on restart).
         if not _registry_scanned:
             _registry_scanned = True
             _er = er.async_get(hass)
@@ -165,30 +176,45 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 "Dyness: Registry-Scan: %d Modul(e) bereits bekannt: %s",
                 len(registry_mids), registry_mids or "leer (Neuinstallation)"
             )
-            # known_module_ids leer lassen → alle Module werden instanziiert
-            # HA verknüpft bestehende Registry-Einträge über unique_id automatisch
+            # known_module_ids intentionally left empty — see comment above.
 
         new_mids = [mid for mid in module_data if mid not in known_module_ids]
         if not new_mids:
             return
+
         new_entities = []
         for mid in new_mids:
             known_module_ids.add(mid)
             mod = module_data[mid]
-            is_tp7_mod = bool(mod.get("is_tp7"))
+            is_tp7_mod      = bool(mod.get("is_tp7"))
+            is_stack100_mod = _is_stack100_module(mod)
+
             for data_key, trans_key, unit, dev_cls, state_cls, icon, precision in MODULE_SENSORS:
+                # Skip sensors that are only available on the BMS master, not per-module
                 if is_tp7_mod and data_key in _TP7_MODULE_SKIP:
-                    continue  # TP7: nur Master liefert diese Werte
+                    continue
+                if is_stack100_mod and data_key in _STACK100_MODULE_SKIP:
+                    continue
+                # For cell voltage entries in MODULE_SENSORS: only register the cell
+                # if it actually exists in the module data. Stack100 has 16 cells so
+                # cell_17 through cell_30 will never be in mod and are skipped here.
+                if data_key.startswith("cell_") and data_key[5:].isdigit():
+                    if mod.get(data_key) is None:
+                        continue
                 new_entities.append(
                     DynessModuleSensor(
                         coordinator, entry, mid, data_key, trans_key,
                         unit, dev_cls, state_cls, icon, precision,
                     )
                 )
-            # Individuelle Zellspannungen — nur für vorhandene Zellen registrieren
-            # Standardmäßig deaktiviert (entity_registry_enabled_default=False)
+
+            # Individual cell voltage sensors (disabled by default, user can enable in HA UI).
+            # Only register cells that actually exist in the module data.
+            # IMPORTANT: Stack100 sends 0.0 (not None) for unpopulated cell slots (cell_17-30).
+            # We use the same v > 0 threshold as _parse_module_points to exclude those.
             for data_key, trans_key, unit, dev_cls, state_cls, icon, precision in _CELL_SENSORS:
-                if mod.get(data_key) is not None:
+                cell_val = mod.get(data_key)
+                if cell_val is not None and float(cell_val) > 0:
                     new_entities.append(
                         DynessModuleSensor(
                             coordinator, entry, mid, data_key, trans_key,
@@ -196,13 +222,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
                             enabled_default=False,
                         )
                     )
+
         if new_entities:
             async_add_entities(new_entities)
 
-    # Beim ersten Refresh bereits vorhandene Module registrieren
+    # Register modules already present on first coordinator refresh
     _add_new_modules()
 
-    # Listener für spätere Updates
+    # Register any new modules that appear in subsequent updates
     entry.async_on_unload(coordinator.async_add_listener(_add_new_modules))
 
 
@@ -244,9 +271,11 @@ class DynessSensor(CoordinatorEntity, SensorEntity):
         return self.coordinator.last_update_success and self.native_value is not None
 
 
-# ── Modul-Sensoren (pro Sub-Modul dynamisch registriert) ─────────────────────
-# (data_key, translation_key, unit, device_class, state_class, icon, precision)
-# Individuelle Zellspannungs-Sensoren (standardmäßig deaktiviert — in HA UI aktivierbar)
+# ── Modul-Sensoren ────────────────────────────────────────────────────────────
+
+# Individual cell voltage sensors — disabled by default, user can enable in HA UI.
+# All 30 are defined here; only those present in the module data dict are registered
+# (see _add_new_modules above). Stack100: cells 01-16. Tower/TP7: cells 01-30.
 _CELL_SENSORS = [
     (f"cell_{i:02d}", f"module_cell_{i:02d}",
      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE,
@@ -254,6 +283,11 @@ _CELL_SENSORS = [
     for i in range(1, 31)
 ]
 
+# MODULE_SENSORS intentionally does NOT include individual cell_XX entries —
+# those go through _CELL_SENSORS with enabled_default=False.
+# The cell_XX entries were previously appended here via a list comprehension,
+# which caused all 30 cells to be registered (enabled=True) regardless of
+# whether the module actually had that many cells. Removed in this fork.
 MODULE_SENSORS = [
     ("soc",                   "module_soc",           PERCENTAGE,                   SensorDeviceClass.BATTERY,     SensorStateClass.MEASUREMENT,      "mdi:battery-high",           None),
     ("soh",                   "module_soh",           PERCENTAGE,                   SensorDeviceClass.BATTERY,     SensorStateClass.MEASUREMENT,      "mdi:battery-heart",          None),
@@ -267,17 +301,11 @@ MODULE_SENSORS = [
     ("voltage",               "module_voltage",       UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE,     SensorStateClass.MEASUREMENT,      "mdi:sine-wave",              3),
     ("current",               "module_current",       UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:current-dc",             None),
     ("has_alarm",             "module_alarm",         None,                         None,                          None,                              "mdi:alert-circle",           None),
-] + [
-    # Individuelle Zellspannungen (Tower: cell_01-30, DL5.0C: cell_01-16)
-    # Standardmäßig deaktiviert — in HA UI aktivierbar
-    (f"cell_{i:02d}", f"module_cell_{i:02d}", UnitOfElectricPotential.VOLT,
-     SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:battery-outline", 3)
-    for i in range(1, 31)
 ]
 
 
 class DynessModuleSensor(CoordinatorEntity, SensorEntity):
-    """Sensor für ein einzelnes Sub-Modul."""
+    """Sensor för ett enskilt sub-modul."""
 
     def __init__(self, coordinator, entry, module_id, data_key,
                  translation_key, unit, device_class, state_class, icon,
@@ -308,7 +336,12 @@ class DynessModuleSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return (self.coordinator.data or {}).get("module_data", {}).get(self._module_id, {}).get(self._data_key)
+        return (
+            (self.coordinator.data or {})
+            .get("module_data", {})
+            .get(self._module_id, {})
+            .get(self._data_key)
+        )
 
     @property
     def available(self):
