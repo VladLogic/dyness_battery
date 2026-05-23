@@ -51,7 +51,7 @@ _BMS_SUFFIXES = ("-BMS", "-BDU")
 SCHEMA_TOWER    = "tower"
 SCHEMA_STACK100 = "stack100"
 SCHEMA_DL5      = "dl5"
-SCHEMA_G2       = "g2"
+SCHEMA_POWERDEPOT = "powerdepot"
 SCHEMA_JUNIOR   = "junior"
 SCHEMA_CYGNI    = "cygni"
 SCHEMA_UNKNOWN  = "unknown"
@@ -71,8 +71,10 @@ _MODEL_SCHEMA_MAP: dict[str, str] = {
     # DL5 / PowerBox Pro Familie
     "DL5.0C":         SCHEMA_DL5,
     "POWERBOX-PRO":   SCHEMA_DL5,
-    # PowerBox G2
-    "POWERBOX-G2":    SCHEMA_G2,
+    # PowerBox G2 (modelCode 42)
+    "POWERBOX-G2":    SCHEMA_DL5,
+    # PowerDepot G2 (modelCode 144)
+    "POWERDEPOT-G2":  SCHEMA_POWERDEPOT,
     # Junior Box / PowerHaus
     "JUNIOR-BOX":     SCHEMA_JUNIOR,
     "POWERHAUS":      SCHEMA_JUNIOR,
@@ -114,7 +116,7 @@ def _detect_schema(device_model_name: str, rt: dict) -> str:
     if "800" in rt:
         return SCHEMA_JUNIOR
     if ("13400" in rt or "12400" in rt) and "800" not in rt and "1400" not in rt:
-        return SCHEMA_G2
+        return SCHEMA_POWERDEPOT
     return SCHEMA_UNKNOWN
 
 
@@ -665,7 +667,7 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             data["alarmSys"]      = str(rt.get("5104", "0")) == "1"
                             data["alarmTotal"]    = rt.get("9999999")
 
-                    elif schema == SCHEMA_G2:
+                    elif schema == SCHEMA_POWERDEPOT:
                         # Powerbox G2 Schema (deviceModelCode 42)
                         # Kein Master/Slave Konzept — alles in einem Block
                         #
@@ -727,6 +729,41 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             data.get("packVoltage"), g2_usable,
                             soc_val, len(cells_g2), cell_temps_valid
                         )
+
+                    # ── Stack100: Power/Current aus Sub-Modulen summieren ──────
+                    # realTimePower zeigte nur einen Stack statt der Summe.
+                    # Stack100 liefert Leistung/Strom auf Sub-Modul-Ebene (via realTimePower
+                    # pro Gerät) — nicht als aggregierten Master-Wert.
+                    # SOC: gewichteter Mittelwert über alle Geräte (Kapazität als Gewicht).
+                    if schema == SCHEMA_STACK100:
+                        mod_data = data.get("module_data", {})
+                        total_power   = 0.0
+                        total_current = 0.0
+                        soc_weighted  = 0.0
+                        cap_total     = 0.0
+                        valid_power   = 0
+                        for mod in mod_data.values():
+                            p = _to_float(mod.get("realTimePower"))
+                            c = _to_float(mod.get("realTimeCurrent"))
+                            s = _to_float(mod.get("soc"))
+                            cap = _to_float(mod.get("total_ah")) or 1.0
+                            if p is not None:
+                                total_power   += p
+                                valid_power   += 1
+                            if c is not None:
+                                total_current += c
+                            if s is not None:
+                                soc_weighted += s * cap
+                                cap_total    += cap
+                        if valid_power > 0:
+                            data["realTimePower"]   = round(total_power, 1)
+                            data["realTimeCurrent"] = round(total_current, 2)
+                            _LOGGER.debug(
+                                "Dyness Stack100: realTimePower=%.1f W aus %d Modulen summiert",
+                                total_power, valid_power,
+                            )
+                        if cap_total > 0:
+                            data["soc"] = round(soc_weighted / cap_total, 1)
 
                     # ── Temperatur-Logik ─────────────────────────────────────
                     # Wenn tempMax == tempMin → nur tempMax behalten (ein Sensor)
@@ -971,11 +1008,16 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             bc  = _to_float(data.get("batteryCapacity"))
                             soc = _to_float(data.get("soc"))
                             soh = _to_float(data.get("soh"))
-                            if bc is not None and soc is not None and soh is not None and soh <= 100:
-                                usable    = round(bc * (soh / 100), 3)
+                            if bc is not None and soc is not None:
+                                soh_factor = (soh / 100) if (soh is not None and soh <= 100) else 1.0
+                                usable    = round(bc * soh_factor, 3)
                                 remaining = round(usable * (soc / 100), 3)
                                 data["usableKwh"]    = usable
                                 data["remainingKwh"] = remaining
+                                _LOGGER.debug(
+                                    "Dyness: usableKwh=%.3f remainingKwh=%.3f (SOC-Fallback: bc=%.3f × soh=%.1f%% × soc=%.1f%%)",
+                                    usable, remaining, bc, soh_factor * 100, soc,
+                                )
                     except (ValueError, TypeError):
                         pass
 
