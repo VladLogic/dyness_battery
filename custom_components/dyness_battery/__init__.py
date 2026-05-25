@@ -48,38 +48,43 @@ _MAX_RETRIES = 3
 _BMS_SUFFIXES = ("-BMS", "-BDU")
 
 # ── Schema-Konstanten ─────────────────────────────────────────────────────────
-SCHEMA_TOWER    = "tower"
-SCHEMA_STACK100 = "stack100"
-SCHEMA_DL5      = "dl5"
-SCHEMA_POWERDEPOT = "powerdepot"
-SCHEMA_JUNIOR   = "junior"
-SCHEMA_CYGNI    = "cygni"
-SCHEMA_UNKNOWN  = "unknown"
+SCHEMA_TOWER        = "tower"
+SCHEMA_STACK100     = "stack100"
+SCHEMA_DL5          = "dl5"
+SCHEMA_POWERBOX_PRO = "powerbox_pro"
+SCHEMA_POWERDEPOT   = "powerdepot"
+SCHEMA_JUNIOR       = "junior"
+SCHEMA_CYGNI        = "cygni"
+SCHEMA_UNKNOWN      = "unknown"
 
 # Explizite Model → Schema Mapping
 # Neue Modelle hier eintragen — kein Code-Logik-Anfassen nötig.
-# Prefix-Match greift automatisch für Varianten (z.B. Cygni 10.0HS).
+# Prefix-Match greift automatisch für Varianten (z.B. STACK100-12S, Cygni 5.0HS).
 _MODEL_SCHEMA_MAP: dict[str, str] = {
-    # Tower Familie
-    "TOWER-T14":      SCHEMA_TOWER,
-    "TOWER-TP7":      SCHEMA_TOWER,
-    "TOWER-TP11":     SCHEMA_TOWER,
-    "TOWER-TP15":     SCHEMA_TOWER,
+    # Tower Familie — exakte Namen aus API verifiziert
+    "TOWER-T14":        SCHEMA_TOWER,
+    "TOWER-PRO-TP7":    SCHEMA_TOWER,   # "Tower Pro TP7"  → TOWER-PRO-TP7
+    "TOWER-PRO-TP11":   SCHEMA_TOWER,   # "Tower Pro TP11" → TOWER-PRO-TP11
+    "TOWER-PRO-TP15":   SCHEMA_TOWER,   # "Tower Pro TP15" → TOWER-PRO-TP15
+    "TOWER-TP7":        SCHEMA_TOWER,   # Fallback falls API ohne "Pro"
+    "TOWER-TP11":       SCHEMA_TOWER,
+    "TOWER-TP15":       SCHEMA_TOWER,
     # Stack100 Familie
-    "STACK100-8S":    SCHEMA_STACK100,
-    "STACK100-10S":   SCHEMA_STACK100,
-    # DL5 / PowerBox Pro Familie
-    "DL5.0C":         SCHEMA_DL5,
-    "POWERBOX-PRO":   SCHEMA_DL5,
-    # PowerBox G2 (modelCode 42)
-    "POWERBOX-G2":    SCHEMA_DL5,
-    # PowerDepot G2 (modelCode 144)
-    "POWERDEPOT-G2":  SCHEMA_POWERDEPOT,
-    # Junior Box / PowerHaus
-    "JUNIOR-BOX":     SCHEMA_JUNIOR,
-    "POWERHAUS":      SCHEMA_JUNIOR,
+    "STACK100-8S":      SCHEMA_STACK100,
+    "STACK100-10S":     SCHEMA_STACK100,
+    # DL5 Familie
+    "DL5.0C":           SCHEMA_DL5,
+    # PowerBox G2 (modelCode 42) — gleiche Point-Struktur wie DL5.0C, verifiziert
+    "POWERBOX-G2":      SCHEMA_DL5,
+    # PowerBox Pro / PowerHaus — eigenes Schema, verifiziert via Log
+    "POWERBOX-PRO":     SCHEMA_POWERBOX_PRO,
+    "POWERHAUS":        SCHEMA_POWERBOX_PRO,
+    # PowerDepot G2 (modelCode 144) — eigenes Schema
+    "POWERDEPOT-G2":    SCHEMA_POWERDEPOT,
+    # Junior Box
+    "JUNIOR-BOX":       SCHEMA_JUNIOR,
     # Cygni Hybrid-Wechselrichter
-    "CYGNI":          SCHEMA_CYGNI,
+    "CYGNI":            SCHEMA_CYGNI,
 }
 
 
@@ -370,7 +375,14 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         except Exception as e:
                             _LOGGER.warning("Dyness station/info nicht erreichbar: %s", e)
 
-                    if not self.device_info:
+                    # ── device_info + storage/list (alle 3 Zyklen) ───────────
+                    # Beide Endpunkte werden im gleichen Zyklus aktualisiert.
+                    # deviceCommunicationStatus kommt je nach Gerät aus storage/list
+                    # ODER aus household/storage/detail — beide müssen aktuell sein.
+                    # Fix: device_info nicht mehr nur einmalig laden sondern ebenfalls
+                    # alle 3 Zyklen — verhindert veralteten Communication Status.
+                    self._storage_list_cycle = (self._storage_list_cycle + 1) % 3
+                    if self._storage_list_cycle == 0 or not self.device_info or not self.storage_info:
                         try:
                             body = {"deviceSn": self.device_sn}
                             if self.dongle_sn:
@@ -383,13 +395,6 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         except Exception as e:
                             _LOGGER.warning("Dyness household/storage/detail nicht erreichbar: %s", e)
 
-                    # ── WorkStatus + Communication Status (alle 3 Zyklen) ──────
-                    # storage/list spart bei jedem 2. von 3 Zyklen
-                    # einen API-Call → kürzeres effektives Intervall bei 5+ Modulen.
-                    # workStatus und deviceCommunicationStatus bleiben max. 3 Zyklen alt —
-                    # für Status-Anzeige ausreichend.
-                    self._storage_list_cycle = (self._storage_list_cycle + 1) % 3
-                    if self._storage_list_cycle == 0 or not self.storage_info:
                         try:
                             result = await self._call(session, "/v1/device/storage/list", {})
                             if _is_success(result):
@@ -582,14 +587,18 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                     data["_schema"] = schema
                     _LOGGER.debug("Dyness: Schema erkannt: %s", schema)
 
-                    # batteryCapacity aus station/info:
-                    # - Tower: station/info = GESAMT-Kapazität → NICHT multiplizieren
-                    # - DL5 Master/Slave: station/info = Kapazität Master → × n_sub_modules
-                    # - Alle anderen: station/info = Kapazität EINES Moduls → × n_modules
+                    # batteryCapacity:
+                    # - Stack100 + Tower: direkt aus BMS-Point (1700) — überschreibt station_info.
+                    #   station_info kann veraltet sein (z.B. nach Modulerweiterung 7→13 Module).
+                    # - DL5 Master/Slave: station_info × n_sub_modules
+                    # - Alle anderen: station_info × n_modules
                     bc_single = _to_float(self.station_info.get("batteryCapacity"))
                     n_modules = max(len(self._module_sns), 1)
                     is_tower_schema = schema == SCHEMA_TOWER
-                    if bc_single is not None and n_modules > 1 and not is_tower_schema:
+                    if schema in (SCHEMA_STACK100, SCHEMA_TOWER):
+                        # Wird unten von Point 1700 überschrieben — hier nur Initialwert
+                        data["batteryCapacity"] = bc_single
+                    elif bc_single is not None and n_modules > 1:
                         data["batteryCapacity"] = round(bc_single * n_modules, 3)
                         _LOGGER.debug(
                             "Dyness: batteryCapacity %s × %d Module = %s kWh",
@@ -597,9 +606,65 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                         )
                     else:
                         data["batteryCapacity"] = bc_single
-                    if schema in (SCHEMA_JUNIOR, SCHEMA_DL5):
-                        # Junior Box / DL5.0C / PowerHaus Schema
-                        data["packVoltage"]           = rt.get("600")
+                    if schema == SCHEMA_STACK100:
+                        # Stack100 Schema — Points direkt vom BMS Master
+                        data["packVoltage"]    = rt.get("1100")
+                        data["soh"]            = rt.get("1500")
+                        data["cycleCount"]     = rt.get("1800")
+                        data["energyChargeTotal"] = rt.get("1900")
+
+                        # Kapazität direkt aus BMS — zuverlässiger als station_info × n_modules.
+                        # Bleibt korrekt auch nach Modulerweiterungen (z.B. 7 → 13 Module).
+                        stack_remaining = _to_float(rt.get("1600"))
+                        stack_usable    = _to_float(rt.get("1700"))
+                        if stack_remaining is not None and stack_remaining > 0:
+                            data["remainingKwh"]    = stack_remaining
+                        if stack_usable is not None and stack_usable > 0:
+                            data["usableKwh"]       = stack_usable
+                            data["batteryCapacity"] = stack_usable  # Point 1700 > station_info
+
+                        # Zellspannungen Master-Ebene
+                        data["cellVoltageMax"]       = rt.get("2400")
+                        data["cellVoltageMin"]       = rt.get("2700")
+                        data["cellVoltageMaxModule"] = rt.get("2500")
+                        data["cellVoltageMaxCell"]   = rt.get("2600")
+                        data["cellVoltageMinModule"] = rt.get("2800")
+                        data["cellVoltageMinCell"]   = rt.get("2900")
+
+                        # Temperaturen
+                        data["tempMax"] = rt.get("3000")
+                        data["tempMin"] = rt.get("3300")
+
+                        # Strom- und Spannungslimits
+                        cl = _to_float(rt.get("2000"))
+                        dl = _to_float(rt.get("2100"))
+                        if cl is not None and cl > 0:
+                            data["chargeCurrentLimit"]    = cl
+                        if dl is not None and dl > 0:
+                            data["dischargeCurrentLimit"] = dl
+
+                        # Balancing
+                        bal = rt.get("4000")
+                        if bal is not None:
+                            data["balancingStatus"] = str(bal) != "0"
+
+                        # Alarm-Bits
+                        data["alarmSpreadV"] = str(rt.get("5001", "0")) == "1"
+                        data["alarmSpreadT"] = str(rt.get("5002", "0")) == "1"
+                        data["alarmInsul"]   = str(rt.get("5003", "0")) == "1"
+                        data["alarmAfe"]     = str(rt.get("5101", "0")) == "1"
+                        data["alarmBms"]     = str(rt.get("5102", "0")) == "1"
+                        data["alarmSys"]     = str(rt.get("5104", "0")) == "1"
+                        data["alarmTotal"]   = rt.get("9999999")
+
+                        _LOGGER.debug(
+                            "Dyness Stack100: usable=%.2f kWh remaining=%.2f kWh "
+                            "cellMax=%s V cellMin=%s V",
+                            stack_usable or 0, stack_remaining or 0,
+                            data.get("cellVoltageMax"), data.get("cellVoltageMin"),
+                        )
+
+                    elif schema in (SCHEMA_JUNIOR, SCHEMA_DL5):
                         data["soh"]                   = rt.get("1200")
                         data["temp"]                  = rt.get("1800")
                         data["cellVoltageMax"]         = rt.get("1300")
@@ -623,6 +688,59 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                                 data["chargeCurrentLimit"] = cl
                             if dl is not None and dl > 0:
                                 data["dischargeCurrentLimit"] = dl
+                    elif schema == SCHEMA_POWERBOX_PRO:
+                        # PowerBox Pro / PowerHaus Schema — verifiziert via Log
+                        # batteryCapacity aus station/info = Gesamtkapazität direkt
+                        # (kein × n_modules — unabhängig von Modulanzahl)
+                        # Points verifiziert:
+                        # 600  = Pack Voltage, 700 = Current, 800 = SOC
+                        # 1200 = SOH, 1300 = Cell Voltage Max, 1500 = Cell Voltage Min
+                        # 1800 = Temp Max, 2000 = Temp Min, 2300 = MOSFET Temp
+                        # 3000 = BMS Temp Max, 3600/3700 = Voltage Limits
+                        # 3800/3900 = Charge/Discharge Current Limit
+                        # 3200–3500 = Alarm-Bits (gleiche Struktur wie Junior/DL5)
+                        # 4000 = Ah-Wert (kein Balancing-Flag — nicht nutzen)
+                        # 900/1000/1100/1900 = leer oder Modul-Nummern → kein Cycle Count
+                        data["packVoltage"]    = rt.get("600")
+                        data["soh"]            = rt.get("1200")
+                        data["cellVoltageMax"] = rt.get("1300")
+                        data["cellVoltageMin"] = rt.get("1500")
+                        data["cellVoltageMaxModule"] = rt.get("1401")
+                        data["cellVoltageMaxCell"]   = rt.get("1402")
+                        data["cellVoltageMinModule"] = rt.get("1601")
+                        data["cellVoltageMinCell"]   = rt.get("1602")
+                        data["tempMax"]        = rt.get("1800")
+                        data["tempMin"]        = rt.get("2000")
+                        data["tempMosfet"]     = rt.get("2300")
+                        data["tempBmsMax"]     = rt.get("3000")
+
+                        cv = _to_float(rt.get("3600"))
+                        dv = _to_float(rt.get("3700"))
+                        if cv is not None and cv > 0:
+                            data["chargeVoltageLimit"]    = cv
+                        if dv is not None and dv > 0:
+                            data["dischargeVoltageLimit"] = dv
+                        cl = _to_float(rt.get("3800"))
+                        dl = _to_float(rt.get("3900"))
+                        if cl is not None and cl > 0:
+                            data["chargeCurrentLimit"]    = cl
+                        if dl is not None and dl > 0:
+                            data["dischargeCurrentLimit"] = dl
+
+                        # Alarm-Bits — gleiche Struktur wie Junior/DL5
+                        data["alarmStatus1"] = rt.get("3200")
+                        data["alarmStatus2"] = rt.get("3300")
+                        data["alarmTotal"]   = rt.get("4100")
+
+                        # usableKwh: batteryCapacity (station/info = Gesamtkapazität)
+                        bc  = _to_float(data.get("batteryCapacity"))
+                        soc = _to_float(data.get("soc"))
+                        soh = _to_float(rt.get("1200"))
+                        if bc is not None and soc is not None:
+                            soh_factor = (soh / 100) if (soh is not None and soh <= 100) else 1.0
+                            data["usableKwh"]    = round(bc * soh_factor, 3)
+                            data["remainingKwh"] = round(bc * soh_factor * soc / 100, 3)
+
                     elif schema == SCHEMA_TOWER:
                         # Tower Schema (Tower T14 + Tower Pro TP7/TP11/TP15)
                         data["soh"]                   = rt.get("1500")
@@ -668,102 +786,112 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                             data["alarmTotal"]    = rt.get("9999999")
 
                     elif schema == SCHEMA_POWERDEPOT:
-                        # Powerbox G2 Schema (deviceModelCode 42)
-                        # Kein Master/Slave Konzept — alles in einem Block
-                        #
-                        # WICHTIG: Point-Bedeutungen beim G2 (aus API-Log verifiziert):
-                        # 12300 = Anzahl Temperatursensoren
-                        # 12400 = BMS Board Temperatur (°C) — KEIN SOC!
-                        # 12500–12800 = Zellbereich-Temperaturen (°C)
-                        # 13400 = Strom (A) — KEIN SOC!
-                        # 13500 = Modulspannung (V)
-                        # 13900 = Ladezyklen
-                        # 14000 = Remain capacity 2 (Ah)
-                        # 14100 = Module total capacity 2 (Ah) — NICHT kWh!
-                        # SOC kommt ausschließlich aus lastPowerData (wie alle anderen Geräte)
-                        # usableKwh kommt aus station/info batteryCapacity
+                        # PowerDepot G2 Schema (modelCode 144)
+                        # Points verifiziert via API-Log (Issue #29):
+                        # 600  = Pack Voltage (avg V)
+                        # 700  = Total Current (A)
+                        # 800  = Average SOC (%)
+                        # 1300 = Cell Voltage Max (V)
+                        # 1500 = Cell Voltage Min (V)
+                        # 1800 = Temperature Max Zellen (°C)
+                        # 2000 = Temperature Min Zellen (°C)
+                        # 2800 = BMS Temperature Max (°C)
+                        # 3000 = BMS Temperature Min (°C)
+                        # 3600/3700 = Charge/Discharge Voltage Limit (V)
+                        data["packVoltage"]     = rt.get("600")
+                        data["realTimeCurrent"] = rt.get("700")
+                        data["soc"]             = rt.get("800")
+                        data["cellVoltageMax"]  = rt.get("1300")
+                        data["cellVoltageMin"]  = rt.get("1500")
+                        data["tempMax"]         = rt.get("1800")
+                        data["tempMin"]         = rt.get("2000")
+                        data["tempBmsMax"]      = rt.get("2800")
+                        data["tempBmsMin"]      = rt.get("3000")
 
-                        data["packVoltage"]   = rt.get("13500")
-                        data["realTimePower"] = rt.get("14000")
-                        data["cycleCount"]    = rt.get("13900")
+                        cv = _to_float(rt.get("3600"))
+                        dv = _to_float(rt.get("3700"))
+                        if cv is not None and cv > 0:
+                            data["chargeVoltageLimit"]    = cv
+                        if dv is not None and dv > 0:
+                            data["dischargeVoltageLimit"] = dv
 
-                        # Nutzbare Kapazität: station/info batteryCapacity ist korrekt (20.48 kWh)
-                        # Point 14100 = Ah-Wert (nicht kWh) → nicht verwenden
-                        g2_usable = _to_float(self.station_info.get("batteryCapacity"))
-                        if g2_usable is not None and g2_usable > 0:
-                            data["usableKwh"] = g2_usable
-
-                        # Verbleibende Energie: usableKwh × SOC (SOC aus lastPowerData)
-                        soc_val = _to_float(data.get("soc"))
-                        if g2_usable is not None and soc_val is not None:
-                            data["remainingKwh"] = round(g2_usable * soc_val / 100, 3)
-
-                        # Temperaturen:
-                        # 12400 = BMS Board Temperatur
-                        # 12500–12800 = Zellbereich-Temperaturen (je 4 Zellen)
-                        bms_temp = _to_float(rt.get("12400"))
-                        cell_temps = [
-                            _to_float(rt.get(str(12500 + i * 100)))
-                            for i in range(4)
-                        ]
-                        cell_temps_valid = [t for t in cell_temps if t is not None and t > 0]
-                        if cell_temps_valid:
-                            data["tempMax"] = max(cell_temps_valid)
-                            data["tempMin"] = min(cell_temps_valid) if len(cell_temps_valid) > 1 else None
-                        elif bms_temp is not None:
-                            data["tempMax"] = bms_temp
-
-                        # Zellspannungen: Points 10300–11800 (16 Zellen)
-                        cells_g2 = []
-                        for i in range(1, 17):
-                            v = _to_float(rt.get(str(10200 + i * 100)))
-                            if v is not None and v > 0:
-                                cells_g2.append(v)
-                        if cells_g2:
-                            data["cellVoltageMax"] = max(cells_g2)
-                            data["cellVoltageMin"] = min(cells_g2)
+                        # Kapazität: batteryCapacity × n_modules (station_info korrekt für G2)
+                        bc  = _to_float(data.get("batteryCapacity"))
+                        soc_g2 = _to_float(rt.get("800"))
+                        if bc is not None and soc_g2 is not None:
+                            data["usableKwh"]    = bc
+                            data["remainingKwh"] = round(bc * soc_g2 / 100, 3)
 
                         _LOGGER.debug(
-                            "Dyness: Powerbox G2 — packVoltage=%s V, usable=%s kWh, "
-                            "SOC=%s%%, cells=%d, temps=%s",
-                            data.get("packVoltage"), g2_usable,
-                            soc_val, len(cells_g2), cell_temps_valid
+                            "Dyness PowerDepot G2: packVoltage=%s V, SOC=%s%%, "
+                            "cellMax=%s V, cellMin=%s V, tempMax=%s°C",
+                            data.get("packVoltage"), soc_g2,
+                            data.get("cellVoltageMax"), data.get("cellVoltageMin"),
+                            data.get("tempMax"),
                         )
 
-                    # ── Stack100: Power/Current aus Sub-Modulen summieren ──────
-                    # realTimePower zeigte nur einen Stack statt der Summe.
-                    # Stack100 liefert Leistung/Strom auf Sub-Modul-Ebene (via realTimePower
-                    # pro Gerät) — nicht als aggregierten Master-Wert.
-                    # SOC: gewichteter Mittelwert über alle Geräte (Kapazität als Gewicht).
-                    if schema == SCHEMA_STACK100:
-                        mod_data = data.get("module_data", {})
-                        total_power   = 0.0
-                        total_current = 0.0
-                        soc_weighted  = 0.0
-                        cap_total     = 0.0
-                        valid_power   = 0
-                        for mod in mod_data.values():
-                            p = _to_float(mod.get("realTimePower"))
-                            c = _to_float(mod.get("realTimeCurrent"))
-                            s = _to_float(mod.get("soc"))
-                            cap = _to_float(mod.get("total_ah")) or 1.0
-                            if p is not None:
-                                total_power   += p
-                                valid_power   += 1
-                            if c is not None:
-                                total_current += c
-                            if s is not None:
-                                soc_weighted += s * cap
-                                cap_total    += cap
-                        if valid_power > 0:
-                            data["realTimePower"]   = round(total_power, 1)
-                            data["realTimeCurrent"] = round(total_current, 2)
-                            _LOGGER.debug(
-                                "Dyness Stack100: realTimePower=%.1f W aus %d Modulen summiert",
-                                total_power, valid_power,
-                            )
-                        if cap_total > 0:
-                            data["soc"] = round(soc_weighted / cap_total, 1)
+                    elif schema == SCHEMA_CYGNI:
+                        # Cygni 10.0HS-M8 Schema (modelCode 192) — Hybrid-Wechselrichter
+                        # Verifiziert via API-Log (Discussion #18)
+                        #
+                        # Besonderheiten:
+                        # - Keine Sub-Module (SUB leer)
+                        # - INVERTIERTE Polarität: negativ = Laden, positiv = Entladen
+                        #   (entgegengesetzt zu allen anderen Dyness-Modellen!)
+                        # - getLastRunningDataBySn ist primäre Datenquelle (vollständig)
+                        # - getLastPowerDataBySn liefert nur SOC/Power (unvollständig)
+                        # - batteryCapacity aus station/info = Gesamtkapazität direkt
+                        #   (30.72 kWh = 4 × 7.68 kWh)
+                        #
+                        # Points aus realTime/data:
+                        # 170  = Battery Voltage (V)
+                        # 171  = Battery Current (A)
+                        # 172  = Battery Power (W) — invertiert!
+                        # 173  = Battery Status
+                        # 2003 = Battery Temperature (°C)
+                        # 2004 = Charge Current Limit (A)
+                        # 2005 = Discharge Current Limit (A)
+                        # 2010 = SOC (%)
+                        # 2011 = SOH (%)
+                        # 164  = Internal Temperature
+                        # 165  = Heat Dissipation Temperature
+                        # 166  = Module Temperature
+
+                        data["packVoltage"] = rt.get("170")
+                        data["soc"]         = rt.get("2010")
+                        data["soh"]         = rt.get("2011")
+                        data["temp"]        = rt.get("2003")
+
+                        cl = _to_float(rt.get("2004"))
+                        dl = _to_float(rt.get("2005"))
+                        if cl is not None and cl > 0:
+                            data["chargeCurrentLimit"]    = cl
+                        if dl is not None and dl > 0:
+                            data["dischargeCurrentLimit"] = dl
+
+                        # Invertierte Polarität korrigieren
+                        raw_power   = _to_float(rt.get("172"))
+                        raw_current = _to_float(rt.get("171"))
+                        if raw_power is not None:
+                            data["realTimePower"]   = raw_power * -1
+                        if raw_current is not None:
+                            data["realTimeCurrent"] = raw_current * -1
+
+                        # Kapazität: station/info = Gesamtkapazität direkt
+                        bc  = _to_float(data.get("batteryCapacity"))
+                        soc_c = _to_float(rt.get("2010"))
+                        soh_c = _to_float(rt.get("2011"))
+                        if bc is not None and soc_c is not None:
+                            soh_factor = (soh_c / 100) if (soh_c is not None and soh_c <= 100) else 1.0
+                            data["usableKwh"]    = round(bc * soh_factor, 3)
+                            data["remainingKwh"] = round(bc * soh_factor * soc_c / 100, 3)
+
+                        _LOGGER.debug(
+                            "Dyness Cygni: packVoltage=%s V, SOC=%s%%, SOH=%s%%, "
+                            "power=%s W (invertiert korrigiert), temp=%s°C",
+                            data.get("packVoltage"), soc_c, soh_c,
+                            data.get("realTimePower"), data.get("temp"),
+                        )
 
                     # ── Temperatur-Logik ─────────────────────────────────────
                     # Wenn tempMax == tempMin → nur tempMax behalten (ein Sensor)
@@ -975,52 +1103,53 @@ class DynessDataCoordinator(DataUpdateCoordinator):
                     data["moduleCount"]  = len(self._module_sns)
 
                     # ── usableKwh / remainingKwh Berechnung ──────────────────
-                    # Strategie 1 (bevorzugt für Powerbox Pro / DL5.0C):
-                    #   Sub-Modul-Daten enthalten remain_ah (Point 13600) und
-                    #   total_ah (Point 13800) sowie Modulspannung (Point 13500).
-                    #   Ah × Spannung liefert kWh direkt aus dem BMS —
-                    #   unabhängig vom oft fehlerhaften soh-Point des Masters.
-                    # Strategie 2 (Fallback): bc × soh/100 × soc/100
-                    try:
-                        mod_data = data.get("module_data", {})
-                        total_remain_kwh = 0.0
-                        total_usable_kwh = 0.0
-                        valid_modules    = 0
-                        for mod in mod_data.values():
-                            remain_ah = _to_float(mod.get("remain_ah"))
-                            total_ah  = _to_float(mod.get("total_ah"))
-                            voltage   = _to_float(mod.get("voltage"))
-                            if (remain_ah is not None and total_ah is not None
-                                    and voltage is not None
-                                    and total_ah > 0 and voltage > 10):
-                                total_remain_kwh += remain_ah * voltage / 1000
-                                total_usable_kwh += total_ah  * voltage / 1000
-                                valid_modules    += 1
-                        if valid_modules > 0 and total_usable_kwh > 0:
-                            data["usableKwh"]    = round(total_usable_kwh, 3)
-                            data["remainingKwh"] = round(total_remain_kwh, 3)
-                            _LOGGER.debug(
-                                "Dyness: usableKwh=%.3f remainingKwh=%.3f (aus %d Modulen via Ah)",
-                                total_usable_kwh, total_remain_kwh, valid_modules,
-                            )
-                        else:
-                            # Fallback: batteryCapacity × SOH × SOC
-                            bc  = _to_float(data.get("batteryCapacity"))
-                            soc = _to_float(data.get("soc"))
-                            soh = _to_float(data.get("soh"))
-                            if bc is not None and soc is not None:
-                                soh_factor = (soh / 100) if (soh is not None and soh <= 100) else 1.0
-                                usable    = round(bc * soh_factor, 3)
-                                remaining = round(usable * (soc / 100), 3)
-                                data["usableKwh"]    = usable
-                                data["remainingKwh"] = remaining
+                    # Stack100: bereits via Point 1600/1700 gesetzt → überspringen.
+                    # DL5: Strategie 1 (Ah-basiert) deaktiviert — Ah-Werte aus 13600/13800
+                    #   repräsentieren nur einen Teilbereich der Kapazität und unterschätzen
+                    #   systematisch (z.B. 3.5 kWh statt 10.24 kWh). batteryCapacity × SOC zuverlässiger.
+                    # Alle anderen: Strategie 1 (Ah) wenn verfügbar, sonst SOC-Fallback.
+                    if schema not in (SCHEMA_STACK100,):
+                        try:
+                            mod_data = data.get("module_data", {})
+                            total_remain_kwh = 0.0
+                            total_usable_kwh = 0.0
+                            valid_modules    = 0
+                            if schema != SCHEMA_DL5:
+                                for mod in mod_data.values():
+                                    remain_ah = _to_float(mod.get("remain_ah"))
+                                    total_ah  = _to_float(mod.get("total_ah"))
+                                    voltage   = _to_float(mod.get("voltage"))
+                                    if (remain_ah is not None and total_ah is not None
+                                            and voltage is not None
+                                            and total_ah > 0 and voltage > 10):
+                                        total_remain_kwh += remain_ah * voltage / 1000
+                                        total_usable_kwh += total_ah  * voltage / 1000
+                                        valid_modules    += 1
+                            if valid_modules > 0 and total_usable_kwh > 0:
+                                data["usableKwh"]    = round(total_usable_kwh, 3)
+                                data["remainingKwh"] = round(total_remain_kwh, 3)
                                 _LOGGER.debug(
-                                    "Dyness: usableKwh=%.3f remainingKwh=%.3f (SOC-Fallback: bc=%.3f × soh=%.1f%% × soc=%.1f%%)",
-                                    usable, remaining, bc, soh_factor * 100, soc,
+                                    "Dyness: usableKwh=%.3f remainingKwh=%.3f (aus %d Modulen via Ah)",
+                                    total_usable_kwh, total_remain_kwh, valid_modules,
                                 )
-                    except (ValueError, TypeError):
-                        pass
-
+                            else:
+                                # Fallback: batteryCapacity × SOH × SOC
+                                bc  = _to_float(data.get("batteryCapacity"))
+                                soc = _to_float(data.get("soc"))
+                                soh = _to_float(data.get("soh"))
+                                if bc is not None and soc is not None:
+                                    soh_factor = (soh / 100) if (soh is not None and soh <= 100) else 1.0
+                                    usable    = round(bc * soh_factor, 3)
+                                    remaining = round(usable * (soc / 100), 3)
+                                    data["usableKwh"]    = usable
+                                    data["remainingKwh"] = remaining
+                                    _LOGGER.debug(
+                                        "Dyness: usableKwh=%.3f remainingKwh=%.3f "
+                                        "(SOC-Fallback: bc=%.3f × soh=%.1f%% × soc=%.1f%%)",
+                                        usable, remaining, bc, soh_factor * 100, soc,
+                                    )
+                        except (ValueError, TypeError):
+                            pass
                     return data
 
             except UpdateFailed:
@@ -1057,7 +1186,11 @@ def _parse_module_points(sn: str, mid: str, pts: dict) -> dict:
     is_tp7_module = is_stack100 and cell_count_pt is not None and int(cell_count_pt) == 30
 
     if is_stack100 and not is_tp7_module:
-        # Stack100: 16 Zellen, Points 11200-12700 (Schritte 100)
+        # Stack100: physische Zellanzahl aus Point 11100 lesen und speichern.
+        # cell_count wird in sensor.py genutzt um nur vorhandene Zellen zu registrieren.
+        phys_cells = int(cell_count_pt) if cell_count_pt is not None else 16
+        d["cell_count"] = phys_cells
+        # 16 Zellen, Points 11200-12700 (Schritte 100)
         # Temperaturen: 14300-14600 (4 Sensoren)
         cells = []
         for i in range(1, 17):
