@@ -1,4 +1,4 @@
-"""Sensoren für Dyness Battery Integration."""
+"""Sensorer för Dyness Battery Integration."""
 import logging
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 _D = EntityCategory.DIAGNOSTIC
 
 SENSORS = [
-    # ── Haupt-Sensoren ────────────────────────────────────────────────────────
+    # ── Huvud-sensorer ────────────────────────────────────────────────────────
     ("soc",                    "battery_soc",            PERCENTAGE,                   SensorDeviceClass.BATTERY,     SensorStateClass.MEASUREMENT,      "mdi:battery-high",           None, None),
     ("realTimePower",          "battery_power",          UnitOfPower.WATT,             SensorDeviceClass.POWER,       SensorStateClass.MEASUREMENT,      "mdi:lightning-bolt",         None, None),
     ("realTimeCurrent",        "battery_current",        UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:current-dc",             None, None),
@@ -36,10 +36,10 @@ SENSORS = [
     ("cycleCount",             "cycle_count",            None,                         None,                          SensorStateClass.TOTAL_INCREASING, "mdi:battery-sync",           None, None),
     ("usableKwh",              "usable_kwh",             UnitOfEnergy.KILO_WATT_HOUR,  SensorDeviceClass.ENERGY,      None,                              "mdi:battery-heart",          None, None),
     ("remainingKwh",           "remaining_kwh",          UnitOfEnergy.KILO_WATT_HOUR,  SensorDeviceClass.ENERGY,      None,                              "mdi:battery-charging",       None, None),
-    # Max Lade-/Entladestrom (Diagnostic)
+    # Max laddnings-/urladdningsström (Diagnostic)
     ("chargeCurrentLimit",     "charge_current_limit",   UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:current-ac",             None, _D),
     ("dischargeCurrentLimit",  "discharge_current_limit",UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:current-ac",             None, _D),
-    # Alarm Text + neue Sensoren
+    # Alarm + nya sensorer
     ("alarmText",              "alarm_text",             None,                         None,                          None,                              "mdi:alert-circle-outline",   None, _D),
     ("chargeVoltageLimit",     "charge_voltage_limit",   UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE,     SensorStateClass.MEASUREMENT,      "mdi:battery-arrow-up",       1,    _D),
     ("dischargeVoltageLimit",  "discharge_voltage_limit",UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE,     SensorStateClass.MEASUREMENT,      "mdi:battery-arrow-down",     1,    _D),
@@ -48,7 +48,7 @@ SENSORS = [
     ("cellVoltageMinModule",   "cell_v_min_module",      None,                         None,                          None,                              "mdi:numeric",                None, _D),
     ("cellVoltageMinCell",     "cell_v_min_cell",        None,                         None,                          None,                              "mdi:numeric",                None, _D),
     ("balancingStatus",        "balancing_status",       None,                         None,                          None,                              "mdi:scale-balance",          None, _D),
-    # Inverter / Hybrid Sensoren (aus getLastRunningDataBySn — nur wenn verfügbar)
+    # Växelriktarsensorer (från getLastRunningDataBySn — bara om tillgängliga)
     ("pvPower",            "pv_power",            UnitOfPower.WATT,               SensorDeviceClass.POWER,       SensorStateClass.MEASUREMENT,      "mdi:solar-power",            None, None),
     ("loadPower",          "load_power",           UnitOfPower.WATT,               SensorDeviceClass.POWER,       SensorStateClass.MEASUREMENT,      "mdi:home-lightning-bolt",    None, None),
     ("gridPower",          "grid_power",           UnitOfPower.WATT,               SensorDeviceClass.POWER,       SensorStateClass.MEASUREMENT,      "mdi:transmission-tower",     None, None),
@@ -79,7 +79,7 @@ SENSORS = [
     ("pv1Current",         "pv1_current",          UnitOfElectricCurrent.AMPERE,   SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:solar-panel",            1,    _D),
     ("pv2Current",         "pv2_current",          UnitOfElectricCurrent.AMPERE,   SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:solar-panel",            1,    _D),
     ("pv3Current",         "pv3_current",          UnitOfElectricCurrent.AMPERE,   SensorDeviceClass.CURRENT,     SensorStateClass.MEASUREMENT,      "mdi:solar-panel",            1,    _D),
-    # Tower Alarm-Bits (Boolean, Diagnostic) — nur einmal registriert
+    # Tower alarm-bits (Boolean, Diagnostic)
     ("alarmSpreadV",           "alarm_spread_v",         None,                         None,                          None,                              "mdi:alert-circle-outline",   None, _D),
     ("alarmSpreadT",           "alarm_spread_t",         None,                         None,                          None,                              "mdi:alert-circle-outline",   None, _D),
     ("alarmInsul",             "alarm_insul",            None,                         None,                          None,                              "mdi:shield-alert",           None, _D),
@@ -87,11 +87,11 @@ SENSORS = [
     ("alarmBms",               "alarm_bms",              None,                         None,                          None,                              "mdi:lan-disconnect",         None, _D),
     ("alarmSys",               "alarm_sys",              None,                         None,                          None,                              "mdi:alert",                  None, _D),
     ("alarmTotal",             "alarm_total",            None,                         None,                          None,                              "mdi:alert",                  None, _D),
-    # JuniorBox / DL5.0C Temperaturen (nur wenn vorhanden)
+    # JuniorBox / DL5.0C temperaturer (bara om tillgängliga)
     ("tempMosfet",             "temp_mosfet",            UnitOfTemperature.CELSIUS,    SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT,      "mdi:thermometer",            None, None),
     ("tempBmsMax",             "temp_bms_max",           UnitOfTemperature.CELSIUS,    SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT,      "mdi:thermometer",            None, None),
     ("tempBmsMin",             "temp_bms_min",           UnitOfTemperature.CELSIUS,    SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT,      "mdi:thermometer",            None, None),
-    # ── Diagnose ─────────────────────────────────────────────────────────────
+    # ── Diagnostik ───────────────────────────────────────────────────────────
     ("createTime",             "last_update",            None,                         None,                          None,                              "mdi:clock-outline",          None, _D),
     ("batteryCapacity",        "battery_capacity",       UnitOfEnergy.KILO_WATT_HOUR,  SensorDeviceClass.ENERGY,      None,                              "mdi:battery",                None, _D),
     ("deviceCommunicationStatus", "communication_status", None,                        None,                          None,                              "mdi:wifi",                   None, _D),
@@ -110,7 +110,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     available_data = coordinator.data or {}
 
-    # Pack-Level Sensoren
+    # Pack-level sensorer
     async_add_entities([
         DynessSensor(coordinator, entry, key, translation_key,
                      unit, device_class, state_class, icon, precision, entity_category)
@@ -118,16 +118,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if key in ALWAYS_REGISTER or available_data.get(key) is not None
     ])
 
-    # Modul-Sensoren — dynamisch bei jedem neuen Modul registrieren
+    # Modul-sensorer — registreras dynamiskt när nya moduler dyker upp
     from homeassistant.helpers import entity_registry as er
 
     known_module_ids: set = set()
     _registry_scanned: bool = False
 
-    # Sensoren die beim Tower Pro TP7 auf Modul-Ebene nicht verfügbar sind
-    _TP7_MODULE_SKIP     = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
-    # Stack100 Sub-Module liefern SOC, SOH, Spannung, Strom, Zyklen nur auf BMS-Master-Ebene.
-    # Auf Sub-Modul-Ebene sind diese Werte nie vorhanden → Sensoren gar nicht erst anlegen.
+    # Sensorer som Tower Pro TP7 inte tillhandahåller på modulnivå
+    _TP7_MODULE_SKIP = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
+    # Stack100 sub-moduler: SOC, SOH, spänning, ström, cykler bara på BMS-master-nivå
     _STACK100_MODULE_SKIP = {'soc', 'soh', 'voltage', 'current', 'cycle_count', 'bms_temp', 'has_alarm'}
 
     def _add_new_modules() -> None:
@@ -136,17 +135,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if not module_data:
             return
 
-        # Beim ersten Aufruf: Registry-Scan.
-        #
-        # WICHTIG: known_module_ids verhindert doppelte Registrierung innerhalb
-        # einer Session. Nach einem HA-Restart muss async_add_entities jedoch
-        # erneut aufgerufen werden — auch für bereits bekannte Module — damit HA
-        # die Entities mit dem Coordinator verknüpft. HA verhindert echte Duplikate
-        # intern über die unique_id (bestehender Registry-Eintrag wird wiederverwendet).
-        #
-        # Deshalb: beim ersten Scan known_module_ids NICHT mit Registry-IDs befüllen.
-        # Stattdessen alle Module in module_data als "neu" behandeln → instanziieren.
-        # Ab dem zweiten Aufruf verhindert known_module_ids echte Duplikate.
+        # Vid första anropet: registry-scan.
+        # known_module_ids lämnas tom → alla moduler instansieras.
+        # HA förhindrar äkta dubbletter internt via unique_id.
+        # Från andra anropet och framåt förhindrar known_module_ids dubbletter i sessionen.
         if not _registry_scanned:
             _registry_scanned = True
             _er = er.async_get(hass)
@@ -157,11 +149,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 and len(parts[1]) >= 8 and parts[1].isalnum()
             }
             _LOGGER.debug(
-                "Dyness: Registry-Scan: %d Modul(e) bereits bekannt: %s",
-                len(registry_mids), registry_mids or "leer (Neuinstallation)"
+                "Dyness: Registry-scan: %d modul(er) redan kända: %s",
+                len(registry_mids), registry_mids or "tom (nyinstallation)"
             )
-            # known_module_ids leer lassen → alle Module werden instanziiert
-            # HA verknüpft bestehende Registry-Einträge über unique_id automatisch
+            # known_module_ids lämnas tom → alla moduler instansieras
 
         new_mids = [mid for mid in module_data if mid not in known_module_ids]
         if not new_mids:
@@ -174,33 +165,29 @@ async def async_setup_entry(hass, entry, async_add_entities):
             is_stack100_mod = mod.get("module_number") is not None and not is_tp7_mod
             for data_key, trans_key, unit, dev_cls, state_cls, icon, precision in MODULE_SENSORS:
                 if is_tp7_mod and data_key in _TP7_MODULE_SKIP:
-                    continue  # TP7: nur Master liefert diese Werte
+                    continue
                 if is_stack100_mod and data_key in _STACK100_MODULE_SKIP:
-                    continue  # Stack100: BMS-only Werte nur auf Master-Ebene verfügbar
+                    continue
                 new_entities.append(
                     DynessModuleSensor(
                         coordinator, entry, mid, data_key, trans_key,
                         unit, dev_cls, state_cls, icon, precision,
                     )
                 )
-            # Individuelle Zellspannungen — nur für vorhandene Zellen registrieren
-            # Stack100 liefert Zellen 17–30 mit pointValue="0.0" (nicht null).
-            # Daher reicht `is not None` nicht — explizit 0.0 ausschließen.
-            # Für Stack100: Point 11100 = physische Zellanzahl → nur bis dort registrieren.
-            # Für alle anderen Schemas: Wert muss vorhanden und > 0 sein.
+            # Individuella cellspänningar — bara för existerande celler
+            # Stack100: celler med pointValue="0.0" är ej monterade → filtrera bort
             is_stack100_mod = mod.get("module_number") is not None and not mod.get("is_tp7")
             phys_cells = int(mod.get("cell_count", 30)) if not is_stack100_mod else int(mod.get("cell_count", 16))
             for data_key, trans_key, unit, dev_cls, state_cls, icon, precision in _CELL_SENSORS:
-                # Zellnummer aus data_key extrahieren (z.B. "cell_17" → 17)
                 try:
                     cell_num = int(data_key.split("_")[1])
                 except (IndexError, ValueError):
                     cell_num = 0
                 if is_stack100_mod and cell_num > phys_cells:
-                    continue  # Stack100: Zellen über physische Anzahl überspringen
+                    continue
                 val = mod.get(data_key)
                 if val is None or (isinstance(val, float) and val == 0.0) or val == "0.0":
-                    continue  # Nicht vorhanden oder explizit 0.0 (API-Platzhalter)
+                    continue
                 new_entities.append(
                     DynessModuleSensor(
                         coordinator, entry, mid, data_key, trans_key,
@@ -211,10 +198,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if new_entities:
             async_add_entities(new_entities)
 
-    # Beim ersten Refresh bereits vorhandene Module registrieren
+    # Registrera moduler som redan finns vid första refresh
     _add_new_modules()
 
-    # Listener für spätere Updates
+    # Lyssnare för framtida uppdateringar
     entry.async_on_unload(coordinator.async_add_listener(_add_new_modules))
 
 
@@ -239,11 +226,19 @@ class DynessSensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self):
         di = self.coordinator.device_info
+        coordinator_data = self.coordinator.data or {}
+        # Använd dynamisk modellbeteckning om tillgänglig (t.ex. "STACK100-13S"),
+        # annars fall tillbaka på deviceModelName från API.
+        model_label = (
+            coordinator_data.get("_detected_model_label")
+            or di.get("deviceModelName")
+            or "Dyness Battery"
+        )
         return {
             "identifiers": {(DOMAIN, self.coordinator.device_sn)},
             "name": di.get("stationName", "Dyness Battery"),
             "manufacturer": "Dyness",
-            "model": di.get("deviceModelName", "Dyness Battery"),
+            "model": model_label,
             "sw_version": di.get("firmwareVersion"),
         }
 
@@ -252,7 +247,6 @@ class DynessSensor(CoordinatorEntity, SensorEntity):
         val = (self.coordinator.data or {}).get(self._key)
         if val is None:
             return None
-        # API liefert Zahlenwerte als Strings — für numerische Sensoren konvertieren
         if self._attr_native_unit_of_measurement is not None:
             try:
                 return float(val)
@@ -265,10 +259,9 @@ class DynessSensor(CoordinatorEntity, SensorEntity):
         return self.coordinator.last_update_success and self.native_value is not None
 
 
-# ── Modul-Sensoren (pro Sub-Modul dynamisch registriert) ─────────────────────
-# (data_key, translation_key, unit, device_class, state_class, icon, precision)
+# ── Modul-sensorer (registreras dynamiskt per sub-modul) ──────────────────────
 
-# Individuelle Zellspannungs-Sensoren (standardmäßig deaktiviert — in HA UI aktivierbar)
+# Individuella cellspänningssensorer (inaktiverade som standard — aktiveras i HA UI)
 _CELL_SENSORS = [
     (f"cell_{i:02d}", f"module_cell_{i:02d}",
      UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE,
@@ -276,7 +269,7 @@ _CELL_SENSORS = [
     for i in range(1, 31)
 ]
 
-# MODULE_SENSORS: aggregierte Sensordaten pro Modul (SOC, SOH, Spannung, Temperatur etc.)
+# MODULE_SENSORS: aggregerade sensordata per modul (SOC, SOH, spänning, temp etc.)
 MODULE_SENSORS = [
     ("soc",                   "module_soc",           PERCENTAGE,                   SensorDeviceClass.BATTERY,     SensorStateClass.MEASUREMENT,      "mdi:battery-high",           None),
     ("soh",                   "module_soh",           PERCENTAGE,                   SensorDeviceClass.BATTERY,     SensorStateClass.MEASUREMENT,      "mdi:battery-heart",          None),
@@ -294,7 +287,7 @@ MODULE_SENSORS = [
 
 
 class DynessModuleSensor(CoordinatorEntity, SensorEntity):
-    """Sensor für ein einzelnes Sub-Modul."""
+    """Sensor för ett enskilt sub-modul."""
 
     def __init__(self, coordinator, entry, module_id, data_key,
                  translation_key, unit, device_class, state_class, icon,
